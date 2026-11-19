@@ -1,0 +1,18 @@
+name: 共通の検査
+# 共通の検査（shared-check.yml）の写しを、このリポジトリの中で呼ぶ。写しの置き方で動き、このリポジトリだけを検査する。
+# 道具は .github/shared-check/ にあり、手順は同じ場所の repo.json にある。どちらも写しで、ここでは直さない。
+# 同時実行の組は、この仕事に置く。同じ PR の新しい push は古い実行を取り消し、main の実行は取り消さない。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  shared:
+    name: 共通の検査
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    uses: ./.github/workflows/shared-check.yml
