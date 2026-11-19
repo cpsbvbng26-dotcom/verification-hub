@@ -4,10 +4,11 @@
 
 This repository holds the checks that the operator's repositories share, and runs them on every change.
 The mechanism is a reusable GitHub Actions workflow, [shared-check.yml](./.github/workflows/shared-check.yml).
-On every push and pull request, each repository calls this workflow, pinned to a commit.
+On every push and pull request, each repository whose entry in the list has caller hub calls this workflow, pinned to a commit.
 The repositories it reads, and the check steps it runs in each of them, are listed in [repos.json](./repos.json).
 The list now holds 15 of the operator's repositories, and this repository itself.
-There is no site, and no outside package.
+There is no site.
+The hub's own tools use no outside package.
 The tools run on Node.js 22.
 
 ## Ways of checking, and what the hub runs
@@ -19,7 +20,7 @@ The ways that need a person or another reviewer stay outside the hub.
 | No. | Way | Hub |
 | --- | --- | --- |
 | 1 | Run the repository's own checks | Runs it (the own job, with the same steps as the repository's CI) |
-| 2 | Run the cross-repository check | Runs it (the common job: check_all.js and check_ecosystem.js of the repository that keeps the canonical copies) |
+| 2 | Run the cross-repository check | Runs it (the common job, only for entries with cross true: check_all.js and check_ecosystem.js of the repository that keeps the canonical copies) |
 | 3 | Look at the CI results | Produces the result (a person or another reviewer looks at it) |
 | 4 | Re-read the sources and the diff | Does not run it |
 | 5 | Compare with the primary sources | Does not run it |
@@ -39,11 +40,14 @@ The workflow has three jobs.
 
 - plan reads the list and lays out the check jobs of the calling repository.
 - own runs the calling repository's CI checks, one job at a time, with the steps in the list.
-- common lays out every repository in the list as a read-only clone, and runs the cross-repository check and the checks that apply the same rule to every repository.
+- common lays out the repositories in the list as read-only clones, and runs the checks that apply the same rule to every repository.
+- common runs the cross-repository check, and scans every repository, only for an entry with cross true.
+- common scans only the calling repository for an entry with cross false.
 
 The steps of own are copied from the jobs of each repository's CI workflows that run on push or pull request.
 Jobs that are not copied are listed under not_carried, each with its reason.
-These are jobs that deploy or record, jobs that run on issues, and jobs that reach hosts outside GitHub.
+These are jobs that deploy or record, jobs that run on issues, and jobs that query external APIs.
+The copied jobs, like each repository's CI, still install packages and browsers from PyPI, npm, apt and the Playwright download host.
 This repository's check compares the steps in the list with the workflows on each repository's main branch, one by one.
 
 ## Calling the hub
@@ -51,7 +55,9 @@ This repository's check compares the steps in the list with the workflows on eac
 A calling repository copies [templates/hub.yml](./templates/hub.yml) into its `.github/workflows/`.
 The template calls the workflow pinned to a commit of this repository.
 The workflow reads its tools and the list from the same commit as itself (`job.workflow_sha` in GitHub Actions).
-A change on this repository's main branch therefore leaves the calling repository's checks as they are, until the pin is raised there.
+A change on this repository's main branch therefore leaves the workflow, the tools and the list as they are, until the pin is raised there.
+The repositories laid out and the cross-repository check, however, are read from each repository's default branch at the time of the run.
+When those change, the result can change under the same pin.
 No inputs and no secrets are passed.
 The version in the comment (v1) is the version of the calling interface.
 
@@ -76,7 +82,7 @@ With `--break`, it breaks the safeguards one at a time, and confirms that the ch
 ## The self-contained arrangement
 
 A repository whose entry in the list has caller self-contained does not call this repository.
-It holds an identical copy of the same workflow, copies of the tools, and a list with its own entry only.
+It holds an identical copy of the same workflow, copies of the tools, a list with its own entry only, and a copy of the tools' licence (MIT).
 In that arrangement, the workflow runs that repository's checks, the scan for email addresses and the links between files, and nothing else.
 The cross-repository check reads that repository from the hub's side, when the other repositories call the hub.
 The reasons are in [docs/decisions.md](./docs/decisions.md) (in Japanese).

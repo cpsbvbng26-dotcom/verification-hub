@@ -1,7 +1,7 @@
 # verification-hub
 
 運営者のリポジトリに共通する検査を、変更のたびに回す仕組みを置く。再利用のワークフロー（`.github/workflows/shared-check.yml`）、
-その道具（`tools/`）、目録（`repos.json`）、呼ぶ側の雛形（`templates/hub.yml`）がある。サイトは持たない。依存は無い。Node.js 22。
+その道具（`tools/`）、目録（`repos.json`）、呼ぶ側の雛形（`templates/hub.yml`）がある。サイトは持たない。このリポジトリの道具は外のパッケージを使わない（呼ばれた先で各リポジトリの検査が入れるものは別）。Node.js 22。
 2026-11-19 に利用者が求めた（「毎回検査する仕組みもリポジトリにして全てに紐づける」）。
 
 ## 決めごと
@@ -23,13 +23,17 @@ Zenodo、独学の範囲）は置かない。
     決まりを持つ。名は目録の鍵としてだけ置く。そのリポジトリは、このリポジトリを呼ばず、ワークフローと道具の写しで動く。
     理由は `docs/decisions.md` にある。
 11. **道具とワークフローに、リポジトリの名を書かない**。名は目録にだけある。写しを持つリポジトリに、ほかの名が入らないようにするため。
-12. **正本の写しを、ここで直さない**。`SECURITY.md`・`.github/ISSUE_TEMPLATE/error-report.yml`・`.github/checked-intake/verify.js`・
+12. **正本の写しを、ここで直さない**。`.github/ISSUE_TEMPLATE/error-report.yml`・`.github/checked-intake/verify.js`・
     `.github/workflows/checked-intake.yml`・`.github/workflows/empty-issue.yml` は、cpsbvbng26-dotcom の正本と一字一句同じ写しである。
     正本を直して写す。写しの SHA-256 は `verification/copies.json` にあり、検査が照らす。
+    `SECURITY.md` だけは写しにせず、このリポジトリのものを置く（正本の文は、文書と静的な頁のリポジトリを書いていて、ここに合わない）。
+    宛先は正本と同じ（ORCID の記録のメールアドレス、宛先そのものは書かない）。理由は `docs/decisions.md` にある。
 13. **ワークフローの守りを弱めない**。権限は `contents: read` だけ。鍵を読まない。外のアクションはコミットの値で固め、版を注釈に書く。
     どの仕事にも時間の上限を置く。run の行に式（`${{ }}`）を書かない。checkout は鍵を残さない。`pull_request_target` と
     `workflow_run` で起こさない。同時実行の組は呼ぶ側の仕事に置く。道具は、ワークフローと同じコミットから読む。
     どれも `verification/check.js` が確かめ、`--break` が一つずつ壊す。
+    横断の検査（正本を持つリポジトリの `check_all.js` と `check_ecosystem.js`）を回すのは、目録で `cross` が true の欄だけである。
+    true は、正本を持つリポジトリの `verification/ecosystem.json` の「共通の決めごと」の十と、ハブ自身に限る。検査がこれを照らす。
 14. **呼ぶ側の雛形（`templates/hub.yml`）は、コミットの値で固める**。ワークフロー・道具・目録を変えたら、そのコミットのあとに、
     雛形の値をそのコミットへ上げるコミットを置く（PR の最後のコミット）。検査は、雛形の値のコミットのそれらと、いまのそれらが
     一字一句同じことを見る。マージはマージコミットで行い、squash も rebase もしない。固めた値が main の履歴に残るようにするため。
