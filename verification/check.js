@@ -730,7 +730,8 @@ const brk = (name, desc, mut) => BREAKS.push({ name, desc, mut });
 const edit = (f, a, b) => (s) => { const t = clone(s); if (!t.text[f] || !t.text[f].includes(a)) throw new Error('壊す元が無い：' + f + ' の「' + a.slice(0, 40) + '」'); t.text[f] = t.text[f].split(a).join(b); return t; };
 const editRe = (f, re, b) => (s) => { const t = clone(s); if (!re.test(t.text[f] || '')) throw new Error('壊す元が無い：' + f + ' ' + re); t.text[f] = t.text[f].replace(re, b); return t; };
 const editJSON = (f, fn) => (s) => { const t = clone(s); const v = JSON.parse(t.text[f]); fn(v); t.text[f] = JSON.stringify(v, null, 2) + '\n'; return t; };
-const editRepo = (repo, f, fn) => (s) => { const t = clone(s); if (!t.repos || !t.repos[repo]) throw new Error('並べた置き場に ' + repo + ' が無い'); t.repos[repo][f] = fn(t.repos[repo][f]); return t; };
+const noRepos = (what) => { const e = new Error('並べた置き場に ' + what + ' が無い'); e.needsRepos = true; return e; };
+const editRepo = (repo, f, fn) => (s) => { const t = clone(s); if (!t.repos || !t.repos[repo]) throw noRepos(repo); t.repos[repo][f] = fn(t.repos[repo][f]); return t; };
 
 brk('ワークフローの権限', 'contents: write にする', edit(SHARED, 'permissions:\n  contents: read\n', 'permissions:\n  contents: write\n'));
 brk('ワークフローの権限', '仕事に権限を足す', edit(SHARED, '    timeout-minutes: 10\n', '    timeout-minutes: 10\n    permissions:\n      contents: read\n'));
@@ -776,7 +777,7 @@ brk('目録の形', 'not_carried の理由を空にする', editJSON('repos.json
 brk('目録の形', 'copies に正本の外の道を足す', editJSON('repos.json', (m) => { m.repos['trinity-operator'].copies.push('README.md'); }));
 brk('目録の形', 'runner を知らない値にする', editJSON('repos.json', (m) => { m.repos['trinity-infinity'].jobs[0].runner = 'windows-latest'; }));
 brk('目録の形', '隣の道で上へ出る', editJSON('repos.json', (m) => { const st = m.repos['trinity-operator'].jobs[0].steps.find((x) => x.sibling); st.path = '../x'; }));
-brk('目録と各リポジトリの CI', '手順を一つ変える', editJSON('repos.json', (m) => { m.repos['errata-check'].jobs[0].steps[1].run = 'python3 tests/check_tool.py --quick'; }));
+brk('目録と各リポジトリの CI', '手順を一つ変える', editJSON('repos.json', (m) => { m.repos['errata-check'].jobs.find((j) => j.id.startsWith('verify.yml/verify/')).steps[1].run = 'python3 tests/check_tool.py --quick'; }));
 brk('目録と各リポジトリの CI', '手順を一つ外す', editJSON('repos.json', (m) => { m.repos['cpsbvbng26-dotcom'].jobs.find((j) => j.id === 'verify.yml/keyboard').steps.pop(); }));
 brk('目録と各リポジトリの CI', 'Python の版を変える', editJSON('repos.json', (m) => { m.repos['self-correction'].jobs.find((j) => j.python).python = '3.13'; }));
 brk('目録と各リポジトリの CI', 'fetch-depth を変える', editJSON('repos.json', (m) => { m.repos['sophaxis'].jobs[0]['fetch-depth'] = '1'; }));
@@ -794,11 +795,11 @@ brk('呼ぶ側の雛形', '雛形の値を履歴に無いものにする', editR
 brk('呼ぶ側の雛形', '雛形の値を最初のコミットにする', (s) => { const first = execFileSync('git', ['rev-list', '--max-parents=0', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim().split('\n')[0]; return editRe(TEMPLATE, /shared-check\.yml@[0-9a-f]{40}/, 'shared-check.yml@' + first)(s); });
 brk('呼ぶ側の雛形', '雛形にだけ定期を足す', edit(TEMPLATE, '  workflow_dispatch:\n', "  workflow_dispatch:\n  schedule:\n    - cron: '0 0 * * 0'\n"));
 brk('呼ぶ側の雛形', '写しの呼び出しの名を変える', edit(LOCAL, '    name: 共通の検査\n', '    name: 別の検査\n'));
-brk('各リポジトリに置いた呼び出し', '呼ぶ側が雛形と違う hub.yml を持つ', (s) => { const t = clone(s); if (!t.repos || !t.repos['solitary-school']) throw new Error('並べた置き場が無い'); t.repos['solitary-school']['.github/workflows/hub.yml'] = t.text[TEMPLATE].replace('cancel-in-progress', 'cancel-in-progres'); return t; });
-brk('各リポジトリに置いた呼び出し', '呼ぶ側の値が履歴に無い', (s) => { const t = clone(s); if (!t.repos || !t.repos['errata-check']) throw new Error('並べた置き場が無い'); t.repos['errata-check']['.github/workflows/hub.yml'] = t.text[TEMPLATE].replace(/@[0-9a-f]{40}/, '@' + 'f'.repeat(40)); return t; });
+brk('各リポジトリに置いた呼び出し', '呼ぶ側が雛形と違う hub.yml を持つ', (s) => { const t = clone(s); if (!t.repos || !t.repos['solitary-school']) throw noRepos('リポジトリ'); t.repos['solitary-school']['.github/workflows/hub.yml'] = t.text[TEMPLATE].replace('cancel-in-progress', 'cancel-in-progres'); return t; });
+brk('各リポジトリに置いた呼び出し', '呼ぶ側の値が履歴に無い', (s) => { const t = clone(s); if (!t.repos || !t.repos['errata-check']) throw noRepos('リポジトリ'); t.repos['errata-check']['.github/workflows/hub.yml'] = t.text[TEMPLATE].replace(/@[0-9a-f]{40}/, '@' + 'f'.repeat(40)); return t; });
 brk('各リポジトリに置いた呼び出し', '写しで動くリポジトリの道具の写しが違う', (s) => {
   const t = clone(s); const m = manifestOf(t); const n = Object.keys(m.repos).find((x) => m.repos[x].caller === 'self-contained');
-  if (!t.repos || !t.repos[n]) throw new Error('並べた置き場が無い');
+  if (!t.repos || !t.repos[n]) throw noRepos('リポジトリ');
   t.repos[n]['.github/workflows/shared-check.yml'] = t.text[SHARED]; t.repos[n]['.github/workflows/shared.yml'] = t.text[LOCAL];
   for (const f of TOOLS) t.repos[n]['.github/shared-check/' + path.basename(f)] = t.text[f];
   t.repos[n]['.github/shared-check/repo.json'] = JSON.stringify(m.repos[n]);
@@ -813,7 +814,7 @@ brk('道具の振る舞い', 'common が UID の行を外さない', edit('tools
 brk('道具の振る舞い', 'common が注釈の中のリンクも見る', edit('tools/common.js', "comment = true;\n      rest = rest.slice(b + 4);", "rest = rest.slice(b + 4);"));
 brk('道具の振る舞い', 'common が写しの違いを見ない', edit('tools/common.js', "else if (!same) bad.写し.push", "else if (false) bad.写し.push"));
 brk('道具の振る舞い', 'common が壊れた活用を見ない', edit('tools/common.js', "if (line.includes(w)) bad.走査", "if (false) bad.走査"));
-brk('道具の振る舞い', 'plan が写しで動く欄をハブの置き方で通す', edit('tools/lib.js', "if (e.caller === 'self-contained') fail(", "if (false) fail("));
+brk('道具の振る舞い', 'plan が写しで動く欄をハブの置き方で通す', (s) => edit('tools/lib.js', "if (!['hub', 'self'].includes(e.caller))", 'if (false)')(edit('tools/lib.js', "if (e.caller === 'self-contained') fail(", 'if (false) fail(')(s)));
 brk('道具の振る舞い', 'lib.load が目録の無いのを通す', edit('tools/lib.js', "return fail('目録が無い（'", "return { mode: 'hub', manifest: { repos: {} } }; void ('目録が無い（'"));
 brk('メールアドレス', 'README に宛先を書く', edit('README.md', 'Claude は著者ではありません。', 'Claude は著者ではありません。\n宛先は someone' + '@' + 'example.org です。'));
 brk('メールアドレス', '目録に宛先を書く', editJSON('repos.json', (m) => { m._.push('x' + '@' + 'example.com'); }));
@@ -822,7 +823,7 @@ brk('所属と学校の名・肩書き', '英語の README に肩書きを書く
 brk('分けておくリポジトリの名', '散文に名を書く', (s) => { const m = manifestOf(s); const n = Object.keys(m.repos).find((x) => m.repos[x].caller === 'self-contained'); return edit('docs/decisions.md', '## 分けておくリポジトリ\n', '## 分けておくリポジトリ\n\n' + n + ' のことです。\n')(s); });
 brk('分けておくリポジトリの名', '片仮名で書く', edit('README.md', '## 写しの置き方\n', '## 写しの置き方\n\nヌス' + 'クァマのことです。\n'));
 brk('分けておくリポジトリの名', '目録の注釈に名を書く', (s) => { const m = manifestOf(s); const n = Object.keys(m.repos).find((x) => m.repos[x].caller === 'self-contained'); return editJSON('repos.json', (v) => { v._.push(n); })(s); });
-brk('利用者に仕事を作らない', 'README に命令を書く', edit('README.md', 'Claude は著者ではありません。', 'Claude は著者ではありません。\n値を上げて' + 'ください。'));
+brk('利用者に仕事を作らない', 'README に命令を書く', edit('README.md', 'Claude は著者ではありません。', 'Claude は著者ではありません。\n値の確かめを' + 'してください。'));
 brk('利用者に仕事を作らない', '英語の README に持ち主の仕事を書く', edit('README.en.md', 'Claude is not an author.', 'Claude is not an author. This needs the ' + 'owner.'));
 brk('issue を読まない', '道具が issue を読む', edit('tools/siblings.js', "const SERVER = 'https://github.com/';", "const SERVER = 'https://github.com/';\nconst ISSUES = 'https://api.github.com/repos/x/y/issues';"));
 brk('issue を読まない', 'ワークフローが issues の権限を持つ', edit(SHARED, 'permissions:\n  contents: read\n', 'permissions:\n  contents: read\n  issues: read\n'));
@@ -882,7 +883,7 @@ function main() {
       if (!c) { missed++; console.log('  落  知らない検査の名：' + b.name); continue; }
       if (c.needsRepos && !s.repos) continue;
       let t;
-      try { t = b.mut(s); } catch (e) { missed++; console.log('  落  ' + b.name + '：' + b.desc + '（壊せない：' + e.message + '）'); continue; }
+      try { t = b.mut(s); } catch (e) { if (e.needsRepos && !s.repos) continue; missed++; console.log('  落  ' + b.name + '：' + b.desc + '（壊せない：' + e.message + '）'); continue; }
       used++;
       let bad;
       try { bad = c.fn(t); } catch (e) { bad = ['投げた']; }
