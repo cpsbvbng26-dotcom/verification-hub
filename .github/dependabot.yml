@@ -1,6 +1,7 @@
 # GitHub Actions の版の更新を知らせる。GitHub の無料の機能で、PR を開くだけ。
 # 外のアクションはコミットの値で固め、版を注釈に書く。Dependabot が上げるときも、この形のまま上げる。
-# その PR は、共通の検査（self-test.yml）が通ってからマージする。shared-check.yml の値が変われば、templates/hub.yml の値も上げる。
+# shared-check.yml の値が変わると、templates/hub.yml が固めたコミットの中身と違うので、共通の検査（self-test.yml）の
+# 「呼ぶ側の雛形」が落ちる。雛形の値をそのコミットへ上げるコミットが同じ枝に入るまで、その PR の検査は通らない。
 version: 2
 updates:
   - package-ecosystem: github-actions

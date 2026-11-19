@@ -3,7 +3,9 @@ name: shared-check
 # 呼ぶ側は、このファイルをコミットの値で固めて呼ぶ。入力も鍵も受け取らない。
 #
 # 道具と目録は、このファイルと同じコミットから読む（job.workflow_repository と job.workflow_sha）。
-# 呼ぶ側が固めたコミットの道具だけが動き、置き場の main が動いても、呼ぶ側の検査は変わらない。
+# 道具・目録・このファイルは、呼ぶ側が固めたコミットのものだけが動く。置き場の main が動いても、それらは変わらない。
+# ただし、並べる兄弟のリポジトリと、横断の検査（正本を持つリポジトリの check_all.js と check_ecosystem.js）は、
+# その実行のときの各リポジトリの既定の枝から読む。そちらが動けば、同じ固めた値でも結果は変わりうる。
 # 置き場に repos.json と tools/ があれば、目録の置き方で動く。目録には、読むリポジトリと、各リポジトリの検査の手順がある。
 # 無ければ、写しの置き方で動く。このファイルの写しを持つリポジトリが、自分の .github/shared-check/ の道具と repo.json で、自分だけを検査する。
 # このファイルと道具には、どのリポジトリの名も書かない。名は目録にだけある。
@@ -11,8 +13,9 @@ name: shared-check
 # 仕事は三つ。
 #   plan    目録を読み、呼んだリポジトリの検査の仕事を並べる。
 #   own     呼んだリポジトリの CI の検査を、目録の手順のとおりに一つずつ回す（仕事ごとに matrix の一つ）。
-#   common  目録の置き方では、目録のすべてのリポジトリを読むだけの複製として並べ、横断の検査を回す。
-#           どちらの置き方でも、写しの一致・メールアドレスと壊れた活用の走査・ファイルのつながりを見る。
+#   common  目録の置き方では、目録のリポジトリを読むだけの複製として並べる。目録の cross が true の欄だけ、横断の検査を回し、
+#           すべてのリポジトリを走査する。false の欄は、自分だけを走査する（写しの一致・宛先と壊れた活用・つながり）。
+#           写しの置き方では、自分だけを走査する。
 #
 # 守り：権限は contents: read だけ。鍵を読まない。外のアクションはコミットの値で固める。どの仕事にも時間の上限がある。
 # checkout は鍵を残さない。run の行に式（${{ }}）を書かない（値は env を通して渡す）。
@@ -30,6 +33,7 @@ jobs:
       name: ${{ steps.plan.outputs.name }}
       jobs: ${{ steps.plan.outputs.jobs }}
       common: ${{ steps.plan.outputs.common }}
+      cross: ${{ steps.plan.outputs.cross }}
       entrance: ${{ steps.plan.outputs.entrance }}
       requirements: ${{ steps.plan.outputs.requirements }}
     steps:
@@ -134,7 +138,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - if: needs.plan.outputs.common == 'true'
+      - if: needs.plan.outputs.cross == 'true'
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
@@ -143,23 +147,27 @@ jobs:
         name: 目録のほかのリポジトリを並べる
         run: node source/tools/siblings.js repos
       # 横断の検査が使う道具は、正本を持つリポジトリの、版とハッシュを固めた一覧からだけ入れる。
-      - if: needs.plan.outputs.common == 'true'
+      - if: needs.plan.outputs.cross == 'true'
         name: 横断の検査の道具を入れる
         env:
           REQUIREMENTS: ${{ needs.plan.outputs.requirements }}
         run: |
           pip install --require-hashes --only-binary=:all: -r "$REQUIREMENTS"
-      - if: needs.plan.outputs.common == 'true'
+      - if: needs.plan.outputs.cross == 'true'
         name: 各リポジトリの検査を全部
         working-directory: repos/${{ needs.plan.outputs.entrance }}
         run: node verification/check_all.js
       # 各リポジトリの検査が落ちても、横断のずれは見る。
-      - if: needs.plan.outputs.common == 'true' && !cancelled()
+      - if: needs.plan.outputs.cross == 'true' && !cancelled()
         name: 横断のずれ
         working-directory: repos/${{ needs.plan.outputs.entrance }}
         run: node verification/check_ecosystem.js
+      # 横断の検査を回さない欄は、自分だけを走査する。ほかのリポジトリは、写しの正本とリンクの行き先を読むためだけに使う。
       - if: '!cancelled()'
         name: 写し・メールアドレスと壊れた活用の走査・ファイルのつながり
+        env:
+          CROSS: ${{ needs.plan.outputs.cross }}
+          CALLER: ${{ needs.plan.outputs.name }}
         run: |
           if [ -f source/repos.json ] && [ -f source/tools/common.js ]; then tools=source/tools; else tools=source/.github/shared-check; fi
-          node "$tools/common.js" repos
+          if [ "$CROSS" = true ]; then node "$tools/common.js" repos; else node "$tools/common.js" repos --only "$CALLER"; fi

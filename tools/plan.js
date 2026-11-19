@@ -5,7 +5,8 @@
  * 出す値（GITHUB_OUTPUT）:
  *   name          呼んだリポジトリの名
  *   jobs          そのリポジトリの検査の仕事の並び（matrix に渡す JSON）。一つも無ければ []
- *   common        横断の検査を回すか（ハブの置き方なら true、写しの置き方なら false）
+ *   common        目録のリポジトリを並べるか（ハブの置き方なら true、写しの置き方なら false）
+ *   cross         横断の検査（check_all.js と check_ecosystem.js）を回すか（目録の cross が true の欄だけ true）
  *   entrance      横断の検査と正本を持つリポジトリの名（写しの置き方では空）
  *   requirements  横断の検査が pip で入れる、版とハッシュを固めた一覧の道（写しの置き方では空） */
 
@@ -27,6 +28,7 @@ function plan(loaded, name) {
     name,
     jobs: JSON.stringify(jobs.map((j) => ({ id: j.id, runner: j.runner, python: j.python || '', node: j.node || '', 'fetch-depth': Number(j['fetch-depth']) }))),
     common: String(loaded.mode === 'hub'),
+    cross: String(loaded.mode === 'hub' && e.cross === true),
     entrance: '',
     requirements: '',
   };
@@ -47,7 +49,7 @@ if (require.main === module) {
     if (loaded.mode === 'hub' && me.owner !== loaded.manifest.owner) lib.fail('目録の持ち主と、呼んだリポジトリの持ち主が違う');
     const out = plan(loaded, me.name);
     for (const [k, v] of Object.entries(out)) lib.output(k, v);
-    console.log(me.name + '：検査の仕事 ' + JSON.parse(out.jobs).length + '、横断の検査 ' + (out.common === 'true' ? 'あり' : 'なし（写しの置き方）'));
+    console.log(me.name + '：検査の仕事 ' + JSON.parse(out.jobs).length + '、横断の検査 ' + (out.cross === 'true' ? 'あり' : 'なし'));
   } catch (e) {
     console.error(e.hub ? e.message : e.stack);
     process.exit(1);

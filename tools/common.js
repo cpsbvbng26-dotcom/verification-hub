@@ -10,6 +10,7 @@
  *   走査    追跡しているテキストのファイルに、許していないメールアドレスが無い。許すものは、正本を持つリポジトリの
  *           verification/check_secrets.js の表から読む（ここに書き写さない）。写しの置き方では、一つも許さない。
  *           Markdown と TOML に、正本を持つリポジトリの verification/check_text.js の CONJUGATION の形が無い（ハブの置き方だけ）。
+ *   --only <名> を付けると、そのリポジトリだけを走査する（横断の検査を回さないリポジトリ）。
  *   つながり Markdown のリンクが、そのリポジトリの追跡しているファイルかディレクトリを指す。
  *           https://github.com/<持ち主>/<名>/blob/main/… と tree/main/… は、目録にあるリポジトリのファイルを指す。
  *
@@ -117,7 +118,7 @@ function check(root, ctx) {
   /* 写し。 */
   if (ctx.copies) {
     const E = ctx.copies.entrance;
-    for (const r of ctx.repos) {
+    for (const r of ctx.scan || ctx.repos) {
       if (!has(r) || !has(E)) continue;
       for (const f of ctx.copies.paths) {
         const want = ctx.copies.listed[r] || [];
@@ -131,7 +132,7 @@ function check(root, ctx) {
 
   /* 走査とつながり。 */
   const GH = new RegExp('^https://github\\.com/' + ctx.owner.replace(/[.-]/g, '\\$&') + '/([A-Za-z0-9._-]+)/(?:blob|tree)/(?:main|HEAD)/([^?#]*)');
-  for (const r of ctx.repos) {
+  for (const r of ctx.scan || ctx.repos) {
     if (!has(r)) continue;
     const dir = path.join(root, r);
     for (const f of files[r]) {
@@ -219,6 +220,13 @@ if (require.main === module) {
     const loaded = lib.load(__dirname);
     const me = lib.caller();
     const ctx = context(loaded, me, path.resolve(root));
+    /* --only <名>：そのリポジトリだけを走査する。ほかのリポジトリは、写しの正本とリンクの行き先を読むためだけに使う。 */
+    const only = process.argv.indexOf('--only');
+    if (only > 0) {
+      const n = process.argv[only + 1];
+      if (!ctx.repos.includes(n)) lib.fail('--only の名が目録に無い');
+      ctx.scan = [n];
+    }
     const { bad, n } = check(path.resolve(root), ctx);
     const lines = [];
     for (const [k, v] of Object.entries(bad)) {
@@ -227,7 +235,7 @@ if (require.main === module) {
       if (v.length > 40) console.log('        ほか ' + (v.length - 40) + ' 件');
       lines.push('| ' + k + ' | ' + (v.length ? '落 ' + v.length : '通') + ' |');
     }
-    console.log('\n' + ctx.repos.length + ' のリポジトリ、' + n.ファイル + ' のファイル、写し ' + n.写し + '、リンク ' + n.リンク + ' を見ました。');
+    console.log('\n' + (ctx.scan || ctx.repos).length + ' のリポジトリ、' + n.ファイル + ' のファイル、写し ' + n.写し + '、リンク ' + n.リンク + ' を見ました。');
     if (process.env.GITHUB_STEP_SUMMARY) {
       fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, ['## 共通の検査', '', '| 見たもの | 結果 |', '| --- | --- |'].concat(lines).join('\n') + '\n\n');
     }

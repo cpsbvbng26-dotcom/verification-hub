@@ -3,7 +3,8 @@
     "共通の検査の目録。どのリポジトリを読み、呼んだリポジトリでどの検査を回すかを決める。道具（tools/）とワークフローには、リポジトリの名を書かない。名はここにだけある。",
     "jobs は、各リポジトリの CI のワークフローのうち、push か pull_request で起きる仕事の手順を写したものである。verification/check.js が、各リポジトリの main のワークフローと一つずつ照らす。",
     "not_carried は、写さない仕事と、その理由（kind）である。kind のうち network と common はここで決めたもので、ほかは検査がワークフローから読んで確かめる。",
-    "caller は、ハブを呼ぶもの（hub）、ハブを呼ばず同じワークフローの写しで動くもの（self-contained）、ハブ自身（self）のどれか。"
+    "caller は、ハブを呼ぶもの（hub）、ハブを呼ばず同じワークフローの写しで動くもの（self-contained）、ハブ自身（self）のどれか。",
+    "cross は、横断の検査（正本を持つリポジトリの check_all.js と check_ecosystem.js）を、そのリポジトリの検査の一部として回すか。true は、正本を持つリポジトリの verification/ecosystem.json の「共通の決めごと」の十と、ハブ自身だけ。false のリポジトリでは、自分の写し・宛先・つながりだけを見る。理由は docs/decisions.md にある。"
   ],
   "version": "v1",
   "owner": "cpsbvbng26-dotcom",
@@ -31,6 +32,7 @@
   "repos": {
     "autonomy-and-self-cultivation": {
       "caller": "hub",
+      "cross": true,
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
@@ -134,6 +136,7 @@
     },
     "cpsbvbng26-dotcom": {
       "caller": "hub",
+      "cross": true,
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
@@ -243,6 +246,7 @@
     },
     "deposit-check": {
       "caller": "hub",
+      "cross": false,
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
@@ -282,6 +286,7 @@
     },
     "errata-check": {
       "caller": "hub",
+      "cross": true,
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
@@ -405,6 +410,7 @@
     },
     "golden-window-resolution": {
       "caller": "hub",
+      "cross": false,
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
@@ -549,6 +555,7 @@
     },
     "justice-and-algorithms": {
       "caller": "hub",
+      "cross": true,
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
@@ -630,6 +637,7 @@
     },
     "naval-gazette-notes": {
       "caller": "hub",
+      "cross": true,
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
@@ -687,6 +695,7 @@
     },
     "nusquama": {
       "caller": "self-contained",
+      "cross": false,
       "copies": [
         ".github/checked-intake/verify.js",
         ".github/workflows/checked-intake.yml",
@@ -762,6 +771,7 @@
     },
     "research-collaboration": {
       "caller": "hub",
+      "cross": false,
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
@@ -812,6 +822,7 @@
     },
     "researcher-profile": {
       "caller": "hub",
+      "cross": true,
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
@@ -867,6 +878,7 @@
     },
     "self-correction": {
       "caller": "hub",
+      "cross": true,
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
@@ -921,6 +933,7 @@
     },
     "solitary-school": {
       "caller": "hub",
+      "cross": true,
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
@@ -969,6 +982,7 @@
     },
     "sophaxis": {
       "caller": "hub",
+      "cross": false,
       "copies": [
         ".github/checked-intake/verify.js",
         ".github/workflows/checked-intake.yml",
@@ -1058,6 +1072,7 @@
     },
     "trinity-infinity": {
       "caller": "hub",
+      "cross": true,
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
@@ -1124,6 +1139,7 @@
     },
     "trinity-operator": {
       "caller": "hub",
+      "cross": true,
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
@@ -1217,8 +1233,8 @@
     },
     "verification-hub": {
       "caller": "self",
+      "cross": true,
       "copies": [
-        "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
         ".github/checked-intake/verify.js",
         ".github/workflows/checked-intake.yml",
