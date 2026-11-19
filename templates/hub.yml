@@ -19,4 +19,4 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-    uses: cpsbvbng26-dotcom/verification-hub/.github/workflows/shared-check.yml@8785e81e5236e880cc18e10f46aa2993a38e5b14 # v1
+    uses: cpsbvbng26-dotcom/verification-hub/.github/workflows/shared-check.yml@c2880ba2768dfd1ccc87b9093e80a4b174fcd1b3 # v1
