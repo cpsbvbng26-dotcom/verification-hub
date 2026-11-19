@@ -1,0 +1,1267 @@
+{
+  "_": [
+    "共通の検査の目録。どのリポジトリを読み、呼んだリポジトリでどの検査を回すかを決める。道具（tools/）とワークフローには、リポジトリの名を書かない。名はここにだけある。",
+    "jobs は、各リポジトリの CI のワークフローのうち、push か pull_request で起きる仕事の手順を写したものである。verification/check.js が、各リポジトリの main のワークフローと一つずつ照らす。",
+    "not_carried は、写さない仕事と、その理由（kind）である。kind のうち network と common はここで決めたもので、ほかは検査がワークフローから読んで確かめる。",
+    "caller は、ハブを呼ぶもの（hub）、ハブを呼ばず同じワークフローの写しで動くもの（self-contained）、ハブ自身（self）のどれか。",
+    "cross は、横断の検査（正本を持つリポジトリの check_all.js と check_ecosystem.js）を、そのリポジトリの検査の一部として回すか。true は、正本を持つリポジトリの verification/ecosystem.json の「共通の決めごと」の十と、ハブ自身だけ。false のリポジトリでは、自分の写し・宛先・つながりだけを見る。理由は docs/decisions.md にある。"
+  ],
+  "version": "v1",
+  "owner": "cpsbvbng26-dotcom",
+  "hub": "verification-hub",
+  "entrance": "cpsbvbng26-dotcom",
+  "common": {
+    "from": "ecosystem.yml/ecosystem",
+    "python": "3.12",
+    "node": "22",
+    "requirements": ".github/requirements-ecosystem.txt",
+    "steps": [
+      "node verification/check_all.js",
+      "node verification/check_ecosystem.js"
+    ],
+    "copies": [
+      "SECURITY.md",
+      ".github/ISSUE_TEMPLATE/error-report.yml",
+      ".github/checked-intake/verify.js",
+      ".github/workflows/checked-intake.yml",
+      ".github/workflows/empty-issue.yml"
+    ],
+    "mailRules": "verification/check_secrets.js",
+    "textRules": "verification/check_text.js"
+  },
+  "repos": {
+    "autonomy-and-self-cultivation": {
+      "caller": "hub",
+      "cross": true,
+      "copies": [
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "hygiene.yml/hygiene",
+          "runner": "ubuntu-latest",
+          "python": "3.12",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python3 verification/check_hygiene.py"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/fidelity",
+          "runner": "ubuntu-latest",
+          "python": "3.12",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "pip install pypdf==6.19.0"
+            },
+            {
+              "run": "python3 verification/check_fidelity.py -v"
+            },
+            {
+              "run": "python3 verification/check_errata.py"
+            },
+            {
+              "run": "python3 verification/check_references.py"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/build",
+          "runner": "ubuntu-latest",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "node verification/check_text.js"
+            },
+            {
+              "run": "node build.js"
+            },
+            {
+              "run": "node verification/check_site.js"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/keyboard",
+          "runner": "ubuntu-24.04",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "node build.js"
+            },
+            {
+              "run": "npm install -g playwright@1.56.1\nnpx playwright install --with-deps chromium"
+            },
+            {
+              "run": "NODE_PATH=\"$(npm root -g)\" node verification/check_keyboard.js"
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "pages.yml/build": {
+          "kind": "uses",
+          "why": "ほかのアクションで配備の支度をする（GitHub Pages）"
+        },
+        "pages.yml/deploy": {
+          "kind": "write",
+          "why": "書く権限を持つ（配備や記録の仕事）"
+        }
+      }
+    },
+    "cpsbvbng26-dotcom": {
+      "caller": "hub",
+      "cross": true,
+      "copies": [
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "doi-index-check.yml/verify",
+          "runner": "ubuntu-latest",
+          "python": null,
+          "node": "20",
+          "fetch-depth": "1",
+          "workdir": "doi-index-check",
+          "steps": [
+            {
+              "run": "node verification/check_tool.js"
+            },
+            {
+              "run": "node verification/check_tool.js --break"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/verify",
+          "runner": "ubuntu-latest",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "0",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "node verification/check_text.js"
+            },
+            {
+              "run": "node verification/check_contrast.js"
+            },
+            {
+              "run": "node verification/check_site.js"
+            },
+            {
+              "run": "node verification/check_trinity.js"
+            },
+            {
+              "run": "node verification/check_secrets.js"
+            },
+            {
+              "run": "node verification/check_secrets.js --break"
+            },
+            {
+              "run": "node verification/check_guards.js"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/keyboard",
+          "runner": "ubuntu-24.04",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "npm install -g playwright@1.56.1\nnpx playwright install --with-deps chromium"
+            },
+            {
+              "run": "NODE_PATH=\"$(npm root -g)\" node verification/check_keyboard.js"
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "datacite.yml/datacite": {
+          "kind": "network",
+          "why": "GitHub の外（api.datacite.org）に出る"
+        },
+        "ecosystem.yml/ecosystem": {
+          "kind": "common",
+          "why": "この仕事は、共通の検査の横断の仕事（common）として回る"
+        },
+        "ecosystem.yml/heartbeat": {
+          "kind": "write",
+          "why": "書く権限を持つ（配備や記録の仕事）"
+        },
+        "indexnow.yml/indexnow": {
+          "kind": "expression",
+          "why": "出来事か鍵の値を式（${{ }}）で読む"
+        },
+        "live.yml/live": {
+          "kind": "expression",
+          "why": "出来事か鍵の値を式（${{ }}）で読む"
+        },
+        "pr-disclosure.yml/disclosure": {
+          "kind": "expression",
+          "why": "出来事か鍵の値を式（${{ }}）で読む"
+        }
+      }
+    },
+    "deposit-check": {
+      "caller": "hub",
+      "cross": false,
+      "copies": [
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "check.yml/check",
+          "runner": "ubuntu-latest",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "node verification/check.js"
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "check.yml/action": {
+          "kind": "action",
+          "why": "このリポジトリの Action を uses: ./ で使う"
+        },
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        }
+      }
+    },
+    "errata-check": {
+      "caller": "hub",
+      "cross": true,
+      "copies": [
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "hygiene.yml/hygiene",
+          "runner": "ubuntu-latest",
+          "python": "3.12",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python3 tests/check_hygiene.py"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/verify/python-version=3.11",
+          "runner": "ubuntu-latest",
+          "python": "3.11",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "pip install pypdf"
+            },
+            {
+              "run": "python3 tests/check_tool.py"
+            },
+            {
+              "run": "python3 errata_check.py examples/minimal/audit.toml"
+            },
+            {
+              "run": "python3 errata_check.py examples/disciplines/audit.toml"
+            },
+            {
+              "run": "python3 errata_check.py examples/references/audit.toml"
+            },
+            {
+              "run": "python3 examples/minimal/build.py\npython3 examples/disciplines/build.py\npython3 examples/references/build.py\ngit diff --exit-code -- examples"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/verify/python-version=3.12",
+          "runner": "ubuntu-latest",
+          "python": "3.12",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "pip install pypdf"
+            },
+            {
+              "run": "python3 tests/check_tool.py"
+            },
+            {
+              "run": "python3 errata_check.py examples/minimal/audit.toml"
+            },
+            {
+              "run": "python3 errata_check.py examples/disciplines/audit.toml"
+            },
+            {
+              "run": "python3 errata_check.py examples/references/audit.toml"
+            },
+            {
+              "run": "python3 examples/minimal/build.py\npython3 examples/disciplines/build.py\npython3 examples/references/build.py\ngit diff --exit-code -- examples"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/verify/python-version=3.13",
+          "runner": "ubuntu-latest",
+          "python": "3.13",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "pip install pypdf"
+            },
+            {
+              "run": "python3 tests/check_tool.py"
+            },
+            {
+              "run": "python3 errata_check.py examples/minimal/audit.toml"
+            },
+            {
+              "run": "python3 errata_check.py examples/disciplines/audit.toml"
+            },
+            {
+              "run": "python3 errata_check.py examples/references/audit.toml"
+            },
+            {
+              "run": "python3 examples/minimal/build.py\npython3 examples/disciplines/build.py\npython3 examples/references/build.py\ngit diff --exit-code -- examples"
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "verify.yml/action": {
+          "kind": "action",
+          "why": "このリポジトリの Action を uses: ./ で使う"
+        }
+      }
+    },
+    "golden-window-resolution": {
+      "caller": "hub",
+      "cross": false,
+      "copies": [
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "verify.yml/scripts/group=curve",
+          "runner": "ubuntu-latest",
+          "python": "3.11",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python -m pip install -r requirements.txt"
+            },
+            {
+              "run": "python verification/run_scripts.py curve"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/scripts/group=edges",
+          "runner": "ubuntu-latest",
+          "python": "3.11",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python -m pip install -r requirements.txt"
+            },
+            {
+              "run": "python verification/run_scripts.py edges"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/scripts/group=symbolic",
+          "runner": "ubuntu-latest",
+          "python": "3.11",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python -m pip install -r requirements.txt"
+            },
+            {
+              "run": "python verification/run_scripts.py symbolic"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/scripts/group=symbolic-referee",
+          "runner": "ubuntu-latest",
+          "python": "3.11",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python -m pip install -r requirements.txt"
+            },
+            {
+              "run": "python verification/run_scripts.py symbolic-referee"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/scripts/group=trinity",
+          "runner": "ubuntu-latest",
+          "python": "3.11",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python -m pip install -r requirements.txt"
+            },
+            {
+              "run": "python verification/run_scripts.py trinity"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/text-and-numbers",
+          "runner": "ubuntu-latest",
+          "python": "3.11",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python -m pip install -r requirements.txt"
+            },
+            {
+              "run": "python verification/check_text.py"
+            },
+            {
+              "run": "python verification/check_text.py --break"
+            },
+            {
+              "run": "python verification/check_numbers.py"
+            },
+            {
+              "run": "python verification/check_numbers.py --break"
+            },
+            {
+              "run": "python verification/check_copies.py"
+            },
+            {
+              "run": "python verification/check_copies.py --break"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/continuity",
+          "runner": "ubuntu-latest",
+          "python": "3.11",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python -m pip install -r requirements.txt"
+            },
+            {
+              "run": "python verification/run_scripts.py continuity"
+            },
+            {
+              "run": "python verification/check_numbers_continuity.py"
+            },
+            {
+              "run": "python verification/check_numbers_continuity.py --break"
+            }
+          ]
+        }
+      ],
+      "not_carried": {}
+    },
+    "justice-and-algorithms": {
+      "caller": "hub",
+      "cross": true,
+      "copies": [
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "hygiene.yml/hygiene",
+          "runner": "ubuntu-latest",
+          "python": "3.12",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python3 verification/check_hygiene.py"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/site",
+          "runner": "ubuntu-latest",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "node build.js"
+            },
+            {
+              "run": "node verification/check_text.js"
+            },
+            {
+              "run": "node verification/check_site.js"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/keyboard",
+          "runner": "ubuntu-24.04",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "node build.js"
+            },
+            {
+              "run": "npm install -g playwright@1.56.1\nnpx playwright install --with-deps chromium"
+            },
+            {
+              "run": "NODE_PATH=\"$(npm root -g)\" node verification/check_keyboard.js"
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "pages.yml/build": {
+          "kind": "uses",
+          "why": "ほかのアクションで配備の支度をする（GitHub Pages）"
+        },
+        "pages.yml/deploy": {
+          "kind": "write",
+          "why": "書く権限を持つ（配備や記録の仕事）"
+        }
+      }
+    },
+    "naval-gazette-notes": {
+      "caller": "hub",
+      "cross": true,
+      "copies": [
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "hygiene.yml/hygiene",
+          "runner": "ubuntu-latest",
+          "python": "3.12",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python3 verification/check_hygiene.py"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/check",
+          "runner": "ubuntu-latest",
+          "python": "3.12",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python3 verification/check_text.py"
+            },
+            {
+              "run": "pip install pypdf"
+            },
+            {
+              "run": "python3 data/check.py"
+            },
+            {
+              "run": "python3 verification/check_errata.py"
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        }
+      }
+    },
+    "nusquama": {
+      "caller": "self-contained",
+      "cross": false,
+      "copies": [
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "mail": {
+        "allowed": [
+          "cd29c5ac348a026a3ec5286890908fffb5bf6ab77f20672171be323a70c95026"
+        ],
+        "why": "言語モデル利用の開示の宛先（Anthropic の noreply）。写しの置き方では正本の表を読めないので、SHA-256 でここに置く"
+      },
+      "jobs": [
+        {
+          "id": "check.yml/check",
+          "runner": "ubuntu-latest",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "0",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "node verification/check.js"
+            }
+          ]
+        },
+        {
+          "id": "check.yml/layout",
+          "runner": "ubuntu-24.04",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "npm install -g playwright@1.56.1\nnpx playwright install --with-deps chromium"
+            },
+            {
+              "run": "NODE_PATH=\"$(npm root -g)\" node verification/check_layout.js"
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "labels.yml/labels": {
+          "kind": "checkout",
+          "why": "自分を checkout しないか、複数の場所に checkout する"
+        },
+        "live.yml/live": {
+          "kind": "expression",
+          "why": "出来事か鍵の値を式（${{ }}）で読む"
+        },
+        "record.yml/record": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "statutes.yml/compare": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "statutes.yml/watch": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        }
+      }
+    },
+    "research-collaboration": {
+      "caller": "hub",
+      "cross": false,
+      "copies": [
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "check.yml/check",
+          "runner": "ubuntu-latest",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "node verification/check.js"
+            },
+            {
+              "run": "node verification/check.js --break"
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "labels.yml/labels": {
+          "kind": "checkout",
+          "why": "自分を checkout しないか、複数の場所に checkout する"
+        },
+        "statutes.yml/compare": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "statutes.yml/watch": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        }
+      }
+    },
+    "researcher-profile": {
+      "caller": "hub",
+      "cross": true,
+      "copies": [
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "verify.yml/verify",
+          "runner": "ubuntu-latest",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "0",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "node verification/check_text.js"
+            },
+            {
+              "run": "node build.js"
+            },
+            {
+              "run": "node verification/check_build.js"
+            },
+            {
+              "run": "node verification/check_secrets.js"
+            },
+            {
+              "run": "node verification/check_secrets.js --break"
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "pages.yml/build": {
+          "kind": "uses",
+          "why": "ほかのアクションで配備の支度をする（GitHub Pages）"
+        },
+        "pages.yml/deploy": {
+          "kind": "write",
+          "why": "書く権限を持つ（配備や記録の仕事）"
+        }
+      }
+    },
+    "self-correction": {
+      "caller": "hub",
+      "cross": true,
+      "copies": [
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "hygiene.yml/hygiene",
+          "runner": "ubuntu-latest",
+          "python": "3.12",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python3 verification/check_hygiene.py"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/verify",
+          "runner": "ubuntu-latest",
+          "python": "3.12",
+          "node": null,
+          "fetch-depth": "0",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python3 verification/check_register.py"
+            },
+            {
+              "run": "python3 verification/check_dataset.py"
+            },
+            {
+              "run": "python3 build.py\ngit diff --exit-code -- REGISTER.md data/register.csv views/\ntest -z \"$(git status --porcelain -- views/ data/)\""
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        }
+      }
+    },
+    "solitary-school": {
+      "caller": "hub",
+      "cross": true,
+      "copies": [
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "hygiene.yml/hygiene",
+          "runner": "ubuntu-latest",
+          "python": "3.12",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "python3 verification/check_hygiene.py"
+            }
+          ]
+        },
+        {
+          "id": "verify.yml/check",
+          "runner": "ubuntu-latest",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "node verification/check_text.js"
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        }
+      }
+    },
+    "sophaxis": {
+      "caller": "hub",
+      "cross": false,
+      "copies": [
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "mail": {
+        "allowed": [
+          "f791265a48a0b6816a0fc59d0a595584175df9ded27a83f53047e35f00cff5d8",
+          "c197603f246b7a35dd3a5b22385f9e64f84f1e24ce7c04f1425308652aeb2384",
+          "f6948876acac83b080950e5c084541119082ad63e1ffab9025f9085cdcd5033f",
+          "73d0f6c3bfa67cb1ab2d0febcd4595f79283fd4363a0dd6e16a134b8cd5e2a9f"
+        ],
+        "why": "このリポジトリの verification/check.js の 46 が許す四つ（OAI-PMH の管理者の宛先、Internet Archive と Creative Commons の公開の窓口、見本の宛先）。宛先は書かず、SHA-256 で置く"
+      },
+      "jobs": [
+        {
+          "id": "check.yml/check",
+          "runner": "ubuntu-latest",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "0",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "sudo apt-get update -q && sudo apt-get install -y -q poppler-utils"
+            },
+            {
+              "run": "node verification/check.js"
+            }
+          ]
+        },
+        {
+          "id": "check.yml/keyboard",
+          "runner": "ubuntu-24.04",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "npm install -g playwright@1.56.1\nnpx playwright install --with-deps chromium"
+            },
+            {
+              "run": "NODE_PATH=\"$(npm root -g)\" node verification/check_keyboard.js"
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "indexnow.yml/indexnow": {
+          "kind": "expression",
+          "why": "出来事か鍵の値を式（${{ }}）で読む"
+        },
+        "labels.yml/labels": {
+          "kind": "checkout",
+          "why": "自分を checkout しないか、複数の場所に checkout する"
+        },
+        "live.yml/live": {
+          "kind": "expression",
+          "why": "出来事か鍵の値を式（${{ }}）で読む"
+        },
+        "live.yml/heartbeat": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "record.yml/record": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "statutes.yml/compare": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "statutes.yml/statutes": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        }
+      }
+    },
+    "trinity-infinity": {
+      "caller": "hub",
+      "cross": true,
+      "copies": [
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "verify.yml/verify",
+          "runner": "ubuntu-latest",
+          "python": "3.12",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "pip install -r requirements.txt"
+            },
+            {
+              "run": "python3 verification/check_text.py"
+            },
+            {
+              "run": "python3 verification/check_secrets.py"
+            },
+            {
+              "run": "python3 verification/independent_check.py"
+            },
+            {
+              "run": "python3 verification/claims_audit.py"
+            },
+            {
+              "run": "python3 verification/check_errata.py"
+            },
+            {
+              "run": "python3 verification/check_route.py"
+            },
+            {
+              "run": "python3 verification/check_meta.py"
+            },
+            {
+              "sibling": "cpsbvbng26-dotcom/trinity-operator",
+              "path": "_sibling/trinity-operator"
+            },
+            {
+              "run": "python3 verification/check_pages.py",
+              "env": {
+                "TRINITY_OPERATOR": "_sibling/trinity-operator"
+              }
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        }
+      }
+    },
+    "trinity-operator": {
+      "caller": "hub",
+      "cross": true,
+      "copies": [
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "verify.yml/verify",
+          "runner": "ubuntu-latest",
+          "python": "3.12",
+          "node": null,
+          "fetch-depth": "1",
+          "workdir": null,
+          "steps": [
+            {
+              "run": "pip install numpy"
+            },
+            {
+              "run": "python3 verification/check_text.py"
+            },
+            {
+              "run": "python3 verification/check_secrets.py"
+            },
+            {
+              "sibling": "cpsbvbng26-dotcom/trinity-infinity",
+              "path": "_sibling/trinity-infinity",
+              "ref": "4c90643bbaeca135f4f975156d2b01f09747103b"
+            },
+            {
+              "run": "mv _sibling/trinity-infinity ../trinity-infinity && rmdir _sibling"
+            },
+            {
+              "run": "python3 check.py"
+            },
+            {
+              "run": "python3 verification/check_certificate.py"
+            },
+            {
+              "run": "python3 verification/check_roadmap.py"
+            },
+            {
+              "run": "python3 verification/check_citation.py"
+            },
+            {
+              "run": "python3 verification/check_lessons.py"
+            },
+            {
+              "run": "python3 verification/check_standard.py"
+            },
+            {
+              "run": "python3 verification/check_games.py"
+            },
+            {
+              "run": "python3 verification/check_site.py"
+            },
+            {
+              "run": "python3 verification/check_docs.py"
+            },
+            {
+              "run": "python3 verification/check_guards.py"
+            },
+            {
+              "run": "python3 demo.py"
+            },
+            {
+              "run": "python3 certificate.py"
+            }
+          ]
+        }
+      ],
+      "not_carried": {
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "labels.yml/labels": {
+          "kind": "checkout",
+          "why": "自分を checkout しないか、複数の場所に checkout する"
+        },
+        "live.yml/live": {
+          "kind": "expression",
+          "why": "出来事か鍵の値を式（${{ }}）で読む"
+        }
+      }
+    },
+    "verification-hub": {
+      "caller": "self",
+      "cross": true,
+      "copies": [
+        ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
+        ".github/workflows/empty-issue.yml"
+      ],
+      "jobs": [
+        {
+          "id": "check",
+          "runner": "ubuntu-latest",
+          "python": null,
+          "node": "22",
+          "fetch-depth": "0",
+          "workdir": null,
+          "steps": [
+            {
+              "siblings": "../repos"
+            },
+            {
+              "run": "node verification/check.js --repos ../repos"
+            },
+            {
+              "run": "node verification/check.js --repos ../repos --break"
+            }
+          ]
+        }
+      ],
+      "not_carried": {}
+    }
+  }
+}

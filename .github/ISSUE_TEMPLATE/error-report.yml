@@ -1,0 +1,63 @@
+name: 誤りの知らせ / Report an error
+description: 公開したものの誤りを知らせる / Report an error in something published here
+title: "誤り: "
+labels: [erratum]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        日本語でも英語でも書けます。issue は公開されます。個人の情報や、公開していない原稿は載せない形にしています。
+        安全の問題は、この様式ではなく SECURITY.md の入口で受けます。
+        Japanese or English. Issues are public, so personal data and unpublished manuscripts are kept out.
+        Security issues go through SECURITY.md, not this form.
+
+        2026-12-01 から、この様式は「突き合わせの受付」で確かめます。「どこか」の所に「書いてあること」の語がそのとおりにあれば、ラベル「quote verified」が付きます。見つからなければ、ラベル「not verified」と決まった文のコメントを付け、その申し立ては受け付けません。本文を直すか新しい issue を開けば、もう一度確かめます。誤りかどうかは、人が読んで決めます。突き合わせの受付は、どの issue も閉じず、人が読みます。
+        From 2026-12-01, this form is checked by the checked intake. If the words under "What it says" occur at the location under "Where", the label "quote verified" is added. If they do not, the label "not verified" and a fixed comment are added, and the claim is not accepted; editing the issue or opening a new one runs the check again. Whether it is an error is decided by a person who reads it. The checked intake never closes an issue; a person reads every one.
+  - type: input
+    id: where
+    attributes:
+      label: どこか / Where
+      description: '欄の初めに一つだけ書きます。ファイルの名（例 `README.md`）、このリポジトリの頁かファイルの URL、またはこのリポジトリが写しを持つ論文の DOI。頁や節は、その後に書けます（確かめるのは文書の全体です） / Begin with one of these: a file name (such as `README.md`), the URL of a page or a file of this repository, or the DOI of a paper of which this repository holds a copy. A page or section may follow (the whole document is checked)'
+    validations:
+      required: true
+  - type: textarea
+    id: printed
+    attributes:
+      label: 書いてあること / What it says
+      description: 書いてあるとおりに一字ずつ写します。空白の違いは見ません。空白を除いて 6 文字以上 / Copied as printed, character by character; differences of white space are ignored. At least 6 characters, not counting spaces
+    validations:
+      required: true
+  - type: textarea
+    id: correct
+    attributes:
+      label: 正しいと考えること / What it should say
+    validations:
+      required: true
+  - type: textarea
+    id: basis
+    attributes:
+      label: 根拠 / Basis
+      description: 一次資料、走らせたコマンドと出力、文献など。外から確かめられる形で / A primary source, a command and its output, or a reference that others can check
+    validations:
+      required: true
+  - type: dropdown
+    id: found_by
+    attributes:
+      label: 見つけた人 / Found by
+      description: 正誤表の「見つけた人」の欄にそのまま入ります / Goes into the errata's "found by" field as it is
+      options:
+        - 読者 / Reader
+        - 著者 / Author
+        - 機械の検査 / Automated check
+    validations:
+      required: true
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: 言語モデルに渡ること / Use of a language model
+      description: |
+        運営者は、これらのリポジトリの作業を Claude Code で行います。その作業のあいだ、この issue の題と本文は、Anthropic（米国）の言語モデル Claude に渡ることがあります。運営者は、これを個人情報保護法第 28 条の外国にある第三者への提供として扱います。米国の制度と Anthropic の措置は、[免責事項](https://github.com/cpsbvbng26-dotcom/cpsbvbng26-dotcom/blob/main/DISCLAIMER.md)の「issue の中身と言語モデル」の節にあります。同意は、いつでも撤回できます。同意しないときは、免責事項にあるメールの宛先で知らせることもできます。メールの中身は、言語モデルに渡しません。
+        The operator works on these repositories with Claude Code. During that work, the title and text of this issue may be given to Claude, the language model of Anthropic (United States). The operator treats this as a provision of personal data to a third party in a foreign country under Article 28 of Japan's Act on the Protection of Personal Information. The system of the United States and Anthropic's measures are in the section "Issues and the language model" of the [disclaimer](https://github.com/cpsbvbng26-dotcom/cpsbvbng26-dotcom/blob/main/DISCLAIMER.en.md). The consent can be withdrawn at any time. Without it, the error can be reported by email instead, to the address the disclaimer gives. The content of an email is not given to a language model.
+      options:
+        - label: この issue の題と本文を、運営者が Claude（Anthropic、米国）に渡すことに同意します。 / I consent to the operator giving the title and text of this issue to Claude (Anthropic, United States).
+          required: true

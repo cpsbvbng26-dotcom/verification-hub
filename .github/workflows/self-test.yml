@@ -1,0 +1,23 @@
+name: 共通の検査
+# このリポジトリ自身を、共通の検査（shared-check.yml）で確かめる。同じコミットのファイルを ./ で呼ぶ。
+# 目録の置き方で動き、このリポジトリの検査（verification/check.js）と、目録のすべてのリポジトリの横断の検査を回す。
+# 週に一度も回す。目録の手順と、各リポジトリの CI のワークフローとのずれは、このリポジトリに変更が無い日にも起きる。
+# 同時実行の組は、この仕事に置く。PR では組が PR ごとに一つで、新しい実行が、走っている実行と待っている実行を取り消す。
+# PR のほか（main への push・定期・手で起こすとき）は、実行ごとに組が分かれるので、どの実行も取り消されない
+# （GitHub は、同じ組で待っている実行を、cancel-in-progress が false でも新しい実行で取り消す）。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '43 5 * * 2'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  shared:
+    name: 共通の検査
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    uses: ./.github/workflows/shared-check.yml
