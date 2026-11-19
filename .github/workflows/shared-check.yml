@@ -147,7 +147,8 @@ jobs:
         name: 横断の検査の道具を入れる
         env:
           REQUIREMENTS: ${{ needs.plan.outputs.requirements }}
-        run: pip install --require-hashes --only-binary=:all: -r "$REQUIREMENTS"
+        run: |
+          pip install --require-hashes --only-binary=:all: -r "$REQUIREMENTS"
       - if: needs.plan.outputs.common == 'true'
         name: 各リポジトリの検査を全部
         working-directory: repos/${{ needs.plan.outputs.entrance }}
