@@ -8,6 +8,7 @@ On every push and pull request, each repository whose entry in the list has call
 The repositories it reads, and the check steps it runs in each of them, are listed in [repos.json](./repos.json).
 The list now holds 15 of the operator's repositories, and this repository itself.
 There is no site.
+The archive is on Zenodo. The DOI of the first version is [`10.5281/zenodo.24382351`](https://doi.org/10.5281/zenodo.24382351), and the DOI common to all versions is [`10.5281/zenodo.24382350`](https://doi.org/10.5281/zenodo.24382350).
 The hub's own tools use no outside package.
 The tools run on Node.js 22.
 
