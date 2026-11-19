@@ -1,0 +1,30 @@
+{
+  "title": "verification-hub: the checks shared by the operator's repositories, run on every change / 運営者のリポジトリに共通する検査を、変更のたびに回す仕組み",
+  "description": "<p>A reusable GitHub Actions workflow, its tools and a list of repositories. Each of the operator's repositories calls the workflow, pinned to a commit, on every push and pull request. The workflow reads its tools and the list from the same commit as itself, so a change here reaches a calling repository only when the pin is raised there. It runs the calling repository's own CI checks with the steps copied from its workflows, the cross-repository check, the break tests the repositories offer, the identity of the canonical copies, a scan of every repository for email addresses and broken conjugations, and the links between files. The workflow holds only the permission to read, reads no secrets, pins every outside action to a commit, and has a time limit on every job; the repository's own check breaks each of these safeguards one at a time and confirms that it fails.</p><p>運営者のリポジトリが、push と PR のたびにコミットの値で固めて呼ぶ、再利用のワークフローと、その道具と、目録です。ワークフローは、道具と目録を自分と同じコミットから読みます。各リポジトリの CI の検査、横断の検査、壊して確かめる検査、正本の写しの一致、メールアドレスと壊れた活用の走査、ファイルのつながりを回します。人か別の担当が行う確かめ方は、この仕組みの外に残ります。</p>",
+  "upload_type": "software",
+  "license": "mit",
+  "access_right": "open",
+  "creators": [
+    {
+      "name": "Nemoto, Takuya",
+      "orcid": "0009-0000-1406-0547"
+    }
+  ],
+  "keywords": [
+    "continuous integration",
+    "GitHub Actions",
+    "reusable workflow",
+    "verification",
+    "reproducibility",
+    "research integrity",
+    "self-correction"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/cpsbvbng26-dotcom/cpsbvbng26-dotcom",
+      "relation": "requires",
+      "scheme": "url"
+    }
+  ],
+  "notes": "The workflow, the tools, the checks and the documents were written with Claude Code (Anthropic) at the author's request. The author is responsible for them. Claude is not an author. The workflow, the tools and the checks are MIT (LICENSE-CODE). The README, the documents and the records are CC BY 4.0 (LICENSE). The licence field of this record covers the workflow, the tools and the checks only. Texts by others that this repository quotes, or keeps to verify its quotations, are not licensed under CC BY 4.0 or the MIT License and remain their owners'."
+}
