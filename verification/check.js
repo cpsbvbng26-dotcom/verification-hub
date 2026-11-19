@@ -101,7 +101,20 @@ const usesLine = (t, u) => (String(t).split('\n').find((l) => l.includes('uses: 
 /* ---------- 検査 ---------- */
 
 const CHECKS = [];
+const NOTES = new Set();
 const check = (name, fn, needsRepos) => CHECKS.push({ name, fn, needsRepos: !!needsRepos });
+
+check('YAML として読める', (s) => {
+  const bad = [];
+  /* 正本の写しはここで直さないので、読めなくても落とさずに書き出す（直すのは正本の側）。 */
+  for (const f of Object.keys(s.text).filter((x) => /\.ya?ml$/.test(x))) {
+    const w = Y(s.text[f]);
+    if (!w.__error) continue;
+    if (copiesOf(s).includes(f)) NOTES.add(f + '（正本の写し）：' + w.__error);
+    else bad.push(f + '：' + w.__error);
+  }
+  return bad;
+});
 
 check('ワークフローの権限', (s) => {
   const bad = [];
@@ -347,7 +360,7 @@ check('横断の手順と正本の CI', (s) => {
   const st = ((w.jobs || {}).common || {}).steps || [];
   const wd = st.filter((x) => x['working-directory'] === 'repos/${{ needs.plan.outputs.entrance }}').map((x) => x.run);
   if (!same(wd, m.common.steps)) bad.push(SHARED + '：common の仕事の横断の手順が、目録の common.steps と違う');
-  if (!st.some((x) => x.run === 'pip install --require-hashes --only-binary=:all: -r "$REQUIREMENTS"' && x.env && x.env.REQUIREMENTS === '${{ needs.plan.outputs.requirements }}')) bad.push(SHARED + '：pip が版とハッシュを固めた一覧から入れない');
+  if (!st.some((x) => (x.run || '').trim() === 'pip install --require-hashes --only-binary=:all: -r "$REQUIREMENTS"' && x.env && x.env.REQUIREMENTS === '${{ needs.plan.outputs.requirements }}')) bad.push(SHARED + '：pip が版とハッシュを固めた一覧から入れない');
   if (!st.some((x) => /^actions\/setup-python@/.test(x.uses || '') && x.with && x.with['python-version'] === m.common.python)) bad.push(SHARED + '：Python の版が目録と違う');
   for (const [id, x] of stepsOf(w)) if (/^actions\/setup-node@/.test(x.uses || '') && x.with['node-version'] !== m.common.node && x.with['node-version'] !== '${{ matrix.job.node }}') bad.push(SHARED + ' ' + id + '：Node の版が目録と違う');
   if (s.repos) {
@@ -733,6 +746,8 @@ const editJSON = (f, fn) => (s) => { const t = clone(s); const v = JSON.parse(t.
 const noRepos = (what) => { const e = new Error('並べた置き場に ' + what + ' が無い'); e.needsRepos = true; return e; };
 const editRepo = (repo, f, fn) => (s) => { const t = clone(s); if (!t.repos || !t.repos[repo]) throw noRepos(repo); t.repos[repo][f] = fn(t.repos[repo][f]); return t; };
 
+brk('YAML として読める', '引用符の無い文字列に「: 」を書く', edit(SHARED, '        run: |\n          pip install --require-hashes --only-binary=:all: -r "$REQUIREMENTS"\n', '        run: pip install --require-hashes --only-binary=:all: -r "$REQUIREMENTS"\n'));
+brk('YAML として読める', '雛形の字下げを崩す', edit(TEMPLATE, '    name: 共通の検査\n', '     name: 共通の検査\n'));
 brk('ワークフローの権限', 'contents: write にする', edit(SHARED, 'permissions:\n  contents: read\n', 'permissions:\n  contents: write\n'));
 brk('ワークフローの権限', '仕事に権限を足す', edit(SHARED, '    timeout-minutes: 10\n', '    timeout-minutes: 10\n    permissions:\n      contents: read\n'));
 brk('ワークフローの権限', '雛形に issues: write を足す', edit(TEMPLATE, 'permissions:\n  contents: read\n', 'permissions:\n  contents: read\n  issues: write\n'));
@@ -786,7 +801,7 @@ brk('目録と各リポジトリの CI', '写せない仕事の理由を偽る',
 brk('目録と各リポジトリの CI', 'CI に仕事を足す', editRepo('justice-and-algorithms', '.github/workflows/verify.yml', (t) => t + '\n  extra:\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7\n        with:\n          persist-credentials: false\n      - run: node x.js\n'));
 brk('目録と各リポジトリの CI', 'CI の手順を一つ変える', editRepo('naval-gazette-notes', '.github/workflows/verify.yml', (t) => t.replace('run: python3 data/check.py', 'run: python3 data/check.py --fast')));
 brk('横断の手順と正本の CI', '横断の手順を一つ外す', edit(SHARED, '        run: node verification/check_ecosystem.js\n', '        run: echo\n'));
-brk('横断の手順と正本の CI', 'pip を固めずに入れる', edit(SHARED, 'run: pip install --require-hashes --only-binary=:all: -r "$REQUIREMENTS"', 'run: pip install numpy pypdf'));
+brk('横断の手順と正本の CI', 'pip を固めずに入れる', edit(SHARED, 'pip install --require-hashes --only-binary=:all: -r "$REQUIREMENTS"', 'pip install numpy pypdf'));
 brk('横断の手順と正本の CI', '正本の横断の手順を変える', editRepo('cpsbvbng26-dotcom', '.github/workflows/ecosystem.yml', (t) => t.replace('run: node verification/check_all.js', 'run: node verification/check_all.js --quick')));
 brk('正本の写し', 'SECURITY.md を一字変える', edit('SECURITY.md', '7 日以内', '8 日以内'));
 brk('正本の写し', 'copies.json の値を一つ変える', editRe(COPIES_JSON, /"SECURITY\.md": "[0-9a-f]/, '"SECURITY.md": "x'));
@@ -873,6 +888,7 @@ function main() {
     if (r.bad.length) { fail++; console.log('  落  ' + r.c.name); r.bad.slice(0, 12).forEach((b) => console.log('        ' + b)); if (r.bad.length > 12) console.log('        ほか ' + (r.bad.length - 12) + ' 件'); }
     else console.log('  通  ' + r.c.name);
   }
+  for (const n of NOTES) console.log('  注  ' + n);
   const ran = res.filter((r) => !r.skipped).length;
   console.log('\n' + ran + ' の検査のうち、' + (ran - fail) + ' が通りました' + (s.repos ? '（並べたリポジトリ ' + Object.keys(s.repos).length + '）' : '（並べたリポジトリなし）') + '。');
   if (BREAK) {

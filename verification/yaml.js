@@ -113,6 +113,8 @@ function scalarOrFlow(s, n) {
   if (s.startsWith('{') || s.startsWith('[')) return flow(s, n);
   if (/^[&*!]/.test(s)) fail(n, 'アンカー・別名・タグは読まない');
   if (s.startsWith("'") || s.startsWith('"')) return unquote(s, n);
+  /* 引用符の無い文字列は、「: 」も「 #」も持てない（YAML の決まり。GitHub もこの形を読まずに落とす）。 */
+  if (/:\s|:$/.test(s)) fail(n, '引用符の無い文字列に「: 」がある');
   return s;
 }
 
