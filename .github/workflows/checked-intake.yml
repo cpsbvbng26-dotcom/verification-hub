@@ -1,0 +1,62 @@
+name: checked-intake
+# Checked intake (突き合わせの受付). A claim in an issue is accepted only when it can be checked against a source that the
+# claimant does not write at the moment of claiming; a claim that fails, or cannot be checked, is turned away with a label
+# and a fixed comment. The forms and what each checks are in .github/checked-intake/config.json; the script is
+# .github/checked-intake/verify.js, the same file in every repository that uses it.
+# It never closes or locks an issue (2026-11-15): every issue stays open for a person. An issue that reads as a request
+# the law requires the operator to receive also gets the label "needs a person".
+# Left alone: an issue with a label that config.json names under neverClose, and an event sent by the owner of the
+# repository (github.event.sender, from the event; the script checks the same in the event file).
+# On a pull request or a push that changes the script, its self-test runs instead.
+# One check per issue at a time (2026-11-15): a newer event of the same issue cancels the older run, and the newer run
+# checks the issue as it is then, so a cancelled run loses nothing. The concurrency is set on the checking job only, and a
+# run whose checking job does not run (an event of the owner, a pull request, a push) gets a group of its own, so that it
+# never takes the place of, or cancels, a run that checks.
+on:
+  issues:
+    types: [opened, edited, reopened]
+  pull_request:
+    paths: ['.github/checked-intake/**', '.github/workflows/checked-intake.yml']
+  push:
+    branches: [main]
+    paths: ['.github/checked-intake/**', '.github/workflows/checked-intake.yml']
+permissions:
+  contents: read
+  issues: write
+jobs:
+  test:
+    if: github.event_name != 'issues'
+    name: The self-test of the checked intake
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: sudo apt-get install -y -qq --no-install-recommends poppler-utils || echo 'poppler-utils could not be installed'
+      - run: node .github/checked-intake/verify.js --test
+      - run: node .github/checked-intake/verify.js --check
+  intake:
+    if: github.event_name == 'issues' && !github.event.issue.pull_request && github.event.sender.login != github.repository_owner
+    name: Check the claim of the issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: ${{ (github.event_name == 'issues' && github.event.sender.login != github.repository_owner) && format('checked-intake-issue-{0}', github.event.issue.number) || format('checked-intake-run-{0}', github.run_id) }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      # pdftotext reads a PDF. If it cannot be installed, a quotation from a PDF is left open as not checked.
+      - run: sudo apt-get install -y -qq --no-install-recommends poppler-utils || echo 'poppler-utils could not be installed'
+      # The script reads the issue from the event file (GITHUB_EVENT_PATH), never from the environment or the shell: the run's log prints a step's environment, and would keep the issue text after the issue is emptied.
+      - run: node .github/checked-intake/verify.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
