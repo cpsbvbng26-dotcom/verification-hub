@@ -33,7 +33,7 @@ const TOOLS = ['tools/lib.js', 'tools/plan.js', 'tools/own.js', 'tools/siblings.
 const COPIES_JSON = 'verification/copies.json';
 const MAX_MINUTES = 60;
 const EVENT_REF = '${{ github.event.pull_request.head.sha || github.sha }}';
-const GROUP = { group: '${{ github.workflow }}-${{ github.ref }}', 'cancel-in-progress': "${{ github.event_name == 'pull_request' }}" };
+const GROUP = { group: "${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}", 'cancel-in-progress': "${{ github.event_name == 'pull_request' }}" };
 /* 決めごと 16〜18 の文（cpsbvbng26-dotcom の枝 claude/rule18-ten-1119、コミット 1065e7f の CLAUDE.md）の SHA-256。 */
 const RULES_16_18 = 'f2abdefb941312298a1081e1b4f7fefa6a337204144d029de170c56d7cb7d9ac';
 
@@ -56,7 +56,7 @@ function readRepo(dir) {
   if (fs.existsSync(wd)) for (const f of fs.readdirSync(wd)) if (/\.ya?ml$/.test(f)) take('.github/workflows/' + f);
   const sc = path.join(dir, '.github', 'shared-check');
   if (fs.existsSync(sc)) for (const f of fs.readdirSync(sc)) take('.github/shared-check/' + f);
-  for (const f of ['SECURITY.md', '.github/ISSUE_TEMPLATE/error-report.yml', '.github/checked-intake/verify.js', 'CLAUDE.md']) take(f);
+  for (const f of ['SECURITY.md', '.github/ISSUE_TEMPLATE/error-report.yml', '.github/checked-intake/verify.js', 'CLAUDE.md', 'verification/ecosystem.json']) take(f);
   return files;
 }
 
@@ -299,7 +299,10 @@ check('目録の形', (s) => {
     if (!lib.NAME.test(n)) bad.push(n + '：名の形');
     if (!['hub', 'self', 'self-contained'].includes(e.caller)) bad.push(n + '：caller ' + e.caller);
     const keys = Object.keys(e);
-    if (keys.some((k) => !['caller', 'copies', 'mail', 'jobs', 'not_carried'].includes(k)) || !['caller', 'copies', 'jobs', 'not_carried'].every((k) => keys.includes(k))) bad.push(n + '：欄の鍵');
+    if (keys.some((k) => !['caller', 'cross', 'copies', 'mail', 'jobs', 'not_carried'].includes(k)) || !['caller', 'cross', 'copies', 'jobs', 'not_carried'].every((k) => keys.includes(k))) bad.push(n + '：欄の鍵');
+    if (typeof e.cross !== 'boolean') bad.push(n + '：cross が true か false でない');
+    if (e.caller === 'self-contained' && e.cross !== false) bad.push(n + '：写しで動く欄の cross が false でない');
+    if (e.caller === 'self' && e.cross !== true) bad.push(n + '：ハブ自身の cross が true でない');
     if (!Array.isArray(e.copies) || e.copies.some((c) => !(m.common.copies || []).includes(c))) bad.push(n + '：copies が common.copies の外');
     if (e.mail && (!e.mail.why || !Array.isArray(e.mail.allowed) || !e.mail.allowed.length || e.mail.allowed.some((h) => !/^[0-9a-f]{64}$/.test(h)))) bad.push(n + '：mail');
     const ids = new Set();
@@ -315,6 +318,7 @@ check('目録の形', (s) => {
       if (ids.has(id)) bad.push(n + '：' + id + ' が jobs と not_carried の両方にある');
     }
   }
+  if (!(m.repos[m.entrance] || {}).cross) bad.push('正本を持つリポジトリの cross が true でない');
   if (!lib.safePath(m.common.requirements || '', false) || !same(m.common.steps, ['node verification/check_all.js', 'node verification/check_ecosystem.js'])) bad.push('common の手順');
   return bad;
 });
@@ -353,6 +357,18 @@ check('目録と各リポジトリの CI', (s) => {
   return bad;
 }, true);
 
+check('横断の検査を回す欄', (s) => {
+  const bad = [];
+  const m = manifestOf(s);
+  const eco = J((s.repos[m.entrance] || {})['verification/ecosystem.json'] || '');
+  const core = eco && eco['共通の決めごと'] && eco['共通の決めごと'].repos;
+  if (!Array.isArray(core) || core.length === 0) return [m.entrance + '/verification/ecosystem.json の「共通の決めごと」が読めない'];
+  const want = core.concat([m.hub]).sort();
+  const got = Object.keys(m.repos).filter((n) => m.repos[n].cross === true).sort();
+  if (!same(got, want)) bad.push('cross が true の欄が、「共通の決めごと」の並びとハブ自身と違う（' + got.filter((x) => !want.includes(x)).concat(want.filter((x) => !got.includes(x))).join('、') + '）');
+  return bad;
+}, true);
+
 check('横断の手順と正本の CI', (s) => {
   const bad = [];
   const m = manifestOf(s);
@@ -360,6 +376,14 @@ check('横断の手順と正本の CI', (s) => {
   const st = ((w.jobs || {}).common || {}).steps || [];
   const wd = st.filter((x) => x['working-directory'] === 'repos/${{ needs.plan.outputs.entrance }}').map((x) => x.run);
   if (!same(wd, m.common.steps)) bad.push(SHARED + '：common の仕事の横断の手順が、目録の common.steps と違う');
+  const CROSS = "needs.plan.outputs.cross == 'true'";
+  for (const x of st) {
+    const heavy = x['working-directory'] || /pip install/.test(x.run || '') || /^actions\/setup-python@/.test(x.uses || '');
+    if (heavy && !String(x.if || '').startsWith(CROSS)) bad.push(SHARED + '：横断の検査の手順が、cross の欄でだけ回る形でない（' + (x.name || x.uses || x.run) + '）');
+  }
+  const scan = st.find((x) => /common\.js/.test(x.run || ''));
+  if (!scan || !scan.env || scan.env.CROSS !== '${{ needs.plan.outputs.cross }}' || scan.env.CALLER !== '${{ needs.plan.outputs.name }}'
+    || !(scan.run || '').includes('if [ "$CROSS" = true ]; then node "$tools/common.js" repos; else node "$tools/common.js" repos --only "$CALLER"; fi')) bad.push(SHARED + '：cross でない欄が、自分だけを走査しない');
   if (!st.some((x) => (x.run || '').trim() === 'pip install --require-hashes --only-binary=:all: -r "$REQUIREMENTS"' && x.env && x.env.REQUIREMENTS === '${{ needs.plan.outputs.requirements }}')) bad.push(SHARED + '：pip が版とハッシュを固めた一覧から入れない');
   if (!st.some((x) => /^actions\/setup-python@/.test(x.uses || '') && x.with && x.with['python-version'] === m.common.python)) bad.push(SHARED + '：Python の版が目録と違う');
   for (const [id, x] of stepsOf(w)) if (/^actions\/setup-node@/.test(x.uses || '') && x.with['node-version'] !== m.common.node && x.with['node-version'] !== '${{ matrix.job.node }}') bad.push(SHARED + ' ' + id + '：Node の版が目録と違う');
@@ -383,7 +407,8 @@ check('正本の写し', (s) => {
   const m = manifestOf(s);
   const cj = J(s.text[COPIES_JSON]) || {};
   const list = Object.keys(cj['写し'] || {});
-  if (!same(list.slice().sort(), (m.common.copies || []).slice().sort()) || !same((m.repos[m.hub] || {}).copies, m.common.copies)) bad.push('copies.json・目録の common.copies・ハブ自身の copies が揃わない');
+  const own = (m.repos[m.hub] || {}).copies || [];
+  if (!same(list.slice().sort(), own.slice().sort()) || own.some((c) => !(m.common.copies || []).includes(c)) || !same((m.common.copies || []).filter((c) => !own.includes(c)), ['SECURITY.md'])) bad.push('copies.json・ハブ自身の copies・common.copies が揃わない（写しにしないのは SECURITY.md だけ）');
   for (const f of list) {
     if (s.text[f] === undefined) { bad.push(f + '：写しが無い'); continue; }
     if (sha256(Buffer.from(s.text[f], 'utf8')) !== cj['写し'][f]) bad.push(f + '：copies.json の SHA-256 と違う');
@@ -439,7 +464,8 @@ check('各リポジトリに置いた呼び出し', (s) => {
       if (r['.github/workflows/shared.yml'] !== s.text[LOCAL]) bad.push(n + '：shared.yml が写しの呼び出しと違う');
       for (const f of TOOLS) if (r['.github/shared-check/' + path.basename(f)] !== s.text[f]) bad.push(n + '：' + path.basename(f) + ' の写しが違う');
       if (!same(J(r['.github/shared-check/repo.json'] || ''), e)) bad.push(n + '：repo.json が目録の欄と違う');
-      const extra = Object.keys(r).filter((f) => f.startsWith('.github/shared-check/') && !TOOLS.map((x) => '.github/shared-check/' + path.basename(x)).concat(['.github/shared-check/repo.json']).includes(f));
+      if (r['.github/shared-check/LICENSE'] !== s.text['LICENSE-CODE']) bad.push(n + '：道具のライセンス（.github/shared-check/LICENSE）が LICENSE-CODE の写しでない');
+      const extra = Object.keys(r).filter((f) => f.startsWith('.github/shared-check/') && !TOOLS.map((x) => '.github/shared-check/' + path.basename(x)).concat(['.github/shared-check/repo.json', '.github/shared-check/LICENSE']).includes(f));
       if (extra.length) bad.push(n + '：写しの置き場に余りのファイル ' + extra.join(','));
     }
   }
@@ -482,7 +508,7 @@ check('道具の振る舞い', (s) => {
     let out = null, err = null;
     try { out = plan.plan({ mode: 'hub', manifest: m }, n); } catch (x) { err = x; }
     if (e.caller === 'self-contained') { if (!err) bad.push('plan：写しで動く ' + n + ' をハブの置き方で通す'); continue; }
-    if (err || JSON.parse(out.jobs).length !== e.jobs.length || out.common !== 'true' || out.requirements !== 'repos/' + m.entrance + '/' + m.common.requirements) bad.push('plan：' + n);
+    if (err || JSON.parse(out.jobs).length !== e.jobs.length || out.common !== 'true' || out.cross !== String(e.cross) || out.requirements !== 'repos/' + m.entrance + '/' + m.common.requirements) bad.push('plan：' + n);
   }
   try { plan.plan({ mode: 'hub', manifest: m }, 'no-such-repository'); bad.push('plan：目録に無いリポジトリを通す'); } catch (x) { /* 落ちてよい */ }
   /* plan：写しの置き方。 */
@@ -490,7 +516,7 @@ check('道具の振る舞い', (s) => {
   if (sc) {
     try {
       const out = plan.plan({ mode: 'self-contained', entry: m.repos[sc] }, sc);
-      if (out.common !== 'false' || out.entrance !== '' || JSON.parse(out.jobs).length !== m.repos[sc].jobs.length) bad.push('plan：写しの置き方の値');
+      if (out.common !== 'false' || out.cross !== 'false' || out.entrance !== '' || JSON.parse(out.jobs).length !== m.repos[sc].jobs.length) bad.push('plan：写しの置き方の値');
     } catch (x) { bad.push('plan：写しの置き方で落ちる ' + x.message); }
   }
   /* lib.load：置き方を、道具の置き場から決める。 */
@@ -541,6 +567,9 @@ check('道具の振る舞い', (s) => {
     if (!/a\/docs\/b\.md:3：壊れた活用/.test(scan)) bad.push('common：壊れた活用を拾わない');
     if (!/gone\.md/.test(links) || /hidden|fenced|b\.md/.test(links) || !/nothing\.md/.test(links) || res.bad.つながり.length !== 2) bad.push('common：つながり ' + links.replace(/\n/g, ' / '));
     if (res.bad.写し.length !== 0) bad.push('common：同じ写しを落とす');
+    const onlyE = common.check(root, Object.assign({}, ctx, { scan: ['e'] }));
+    if (onlyE.bad.走査.length || onlyE.bad.つながり.length) bad.push('common：--only の欄のほかのリポジトリまで走査する');
+    if (common.check(root, Object.assign({}, ctx, { scan: ['a'] })).bad.つながり.length !== 2) bad.push('common：--only の欄のリンクが、ほかのリポジトリのファイルを読まない');
     fs.writeFileSync(path.join(root, 'a', 'S.md'), 'other\n');
     if (common.check(root, ctx).bad.写し.length !== 1) bad.push('common：違う写しを通す');
   } catch (x) {
@@ -651,6 +680,21 @@ check('散文の数', (s) => {
     [/回すのは (\d+) つ/g, runs], [/the hub runs (\d+)\./g, runsEn], [/残る (\d+) つ/g, rest], [/The remaining (\d+) stay/g, restEn],
     [/（v(\d+)）/g, Number(String(m.version).slice(1))], [/\(v(\d+)\)/g, Number(String(m.version).slice(1))],
     [/CC BY (4)\.0/g, 4], [/CC BY 4\.(0)/g, 0],
+    [/occurred in (60) days/g, 60],
+  ];
+  /* 語で書いた数。漢字（二〜十）と英語（two〜ten）も、表のどれかで、実際の値と合う。 */
+  const jobs = Object.keys((Y(s.text[SHARED] || '').jobs) || {}).length;
+  const common = s.text['tools/common.js'] || '';
+  const skips = ['if (/\\.ics$/.test(f) && /^UID:/.test(line)) return;', "if (/^[(\\[]/.test(line.slice(m.index + m[0].length))) continue;"].filter((x) => common.includes(x)).length;
+  const rowJa = (String(s.text['README.md'] || '').split('\n').find((l) => l.startsWith('| pull_request_target と workflow_run')) || '');
+  const rowEn = (String(s.text['README.en.md'] || '').split('\n').find((l) => l.startsWith('| Never triggered by pull_request_target')) || '');
+  const words = (row) => ['pull_request_target', 'workflow_run'].filter((w) => row.includes(w)).length;
+  const KANJI = { 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+  const EN = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+  const WORDS = [
+    [/(三)つの仕事/g, jobs], [/(three) jobs/g, jobs],
+    [/宛先ではないものを(二)つ外しました/g, skips],
+    [/(二)つの語が無い/g, words(rowJa)], [/the (two) words are absent/g, words(rowEn)],
   ];
   if (ja.length !== ruleWays(s.text['CLAUDE.md']).length || en.length !== ja.length) bad.push('やり方の表の行の数が、決めごとの数と揃わない');
   ja.forEach((r, k) => { const w = ruleWays(s.text['CLAUDE.md'])[k]; if (Number(r[0]) !== k + 1 || !w || w[1] !== r[1]) bad.push('README.md のやり方の ' + (k + 1) + ' 行目が決めごとと違う'); });
@@ -664,6 +708,11 @@ check('散文の数', (s) => {
     for (const [re, want] of TABLE) {
       t = t.replace(re, (all, n) => { if (Number(n) !== want) bad.push(f + '：「' + all + '」の数が実際（' + want + '）と違う'); return all.replace(/\d/g, '#'); });
     }
+    for (const [re, want] of WORDS) {
+      t = t.replace(re, (all, n) => { const v = KANJI[n] || EN[n]; if (v !== want) bad.push(f + '：「' + all + '」の数が実際（' + want + '）と違う'); return all.replace(n, '#'); });
+    }
+    const wl = t.match(/[二三四五六七八九十]つ|\b(?:two|three|four|five|six|seven|eight|nine|ten)\b/gi);
+    if (wl) bad.push(f + '：数の表に無い語の数 ' + wl.slice(0, 5).join(','));
     const left = t.match(/\d+/g);
     if (left) bad.push(f + '：数の表に無い数 ' + left.slice(0, 5).join(','));
   }
@@ -716,6 +765,26 @@ check('依存', (s) => {
 /* Zenodo の記録（.zenodo.json）。運営者のほかのリポジトリと同じ形：著者は一人で ORCID iD つき、所属を書かない。
  * ライセンスの欄は LICENSE-CODE と同じ MIT で、notes がその欄の掛かる範囲と言語モデル利用の開示を書く。
  * 関連の識別子に DOI を置かない（DOI は受け取ったものだけを書く。このリポジトリは受け取っていない）。 */
+/* SECURITY.md は写しにせず、このリポジトリのことを書く。宛先の道は正本と同じ（ORCID の記録）。宛先そのものは書かない。 */
+check('SECURITY.md', (s) => {
+  const t = s.text['SECURITY.md'] || '';
+  const bad = [];
+  const orcid = '[ORCID の記録](https://orcid.org/0009-0000-1406-0547)', orcidEn = '[ORCID record](https://orcid.org/0009-0000-1406-0547)';
+  if (!t.includes(orcid) || !t.includes(orcidEn)) bad.push('宛先の道（ORCID の記録）が日英に無い');
+  if (!t.includes('/repos/cpsbvbng26-dotcom/verification-hub/private-vulnerability-reporting') || !/2026-11-19 に、GitHub の API/.test(t) || !/checked on 2026-11-19 through the GitHub API/.test(t)) bad.push('非公開の脆弱性報告を API で確かめた日が無い');
+  if (!t.includes('shared-check.yml') || !t.includes('呼ぶ運営者のほかのリポジトリの Actions の中で動きます')) bad.push('このリポジトリのワークフローを書かない');
+  if (/errata-check|deposit-check/.test(t)) bad.push('正本の文（ほかのリポジトリの Action）が残る');
+  if (MAIL.test(t)) bad.push('宛先そのものを書く');
+  const days = (/答えは (\d+) 日以内を目指します。/.exec(t) || [])[1], daysEn = (/answer within (\d+) days\./.exec(t) || [])[1];
+  if (!days || days !== daysEn) bad.push('答えの日数が日英で揃わない');
+  if (s.repos) {
+    const e = (s.repos[manifestOf(s).entrance] || {})['SECURITY.md'] || '';
+    if (e === t) bad.push('正本と同じ（写しにしない）');
+    if ((/答えは (\d+) 日以内を目指します。/.exec(e) || [])[1] !== days) bad.push('答えの日数が正本と違う');
+  }
+  return bad;
+});
+
 check('Zenodo の記録', (s) => {
   const z = J(s.text['.zenodo.json']);
   if (!z) return ['.zenodo.json が読めない'];
@@ -770,7 +839,8 @@ brk('run の行に式を書かない', '出来事の ref を path に使う', ed
 brk('同時実行の組', 'ワークフローの全体に組を置く', edit(SHARED, 'permissions:\n  contents: read\njobs:\n', 'permissions:\n  contents: read\nconcurrency: x\njobs:\n'));
 brk('同時実行の組', 'matrix の仕事に組を置く', edit(SHARED, '    timeout-minutes: 60\n    steps:\n      - name: このワークフローの置き場とコミットを確かめる\n        env:\n          SOURCE_REPOSITORY: ${{ job.workflow_repository }}\n          SOURCE_SHA: ${{ job.workflow_sha }}\n        run: |\n          [[ "$SOURCE_REPOSITORY" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ ]] || { echo \'job.workflow_repository を読めない\'; exit 1; }\n          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo \'job.workflow_sha を読めない\'; exit 1; }\n      # 呼んだ',
   '    timeout-minutes: 60\n    concurrency: own\n    steps:\n      - name: このワークフローの置き場とコミットを確かめる\n        env:\n          SOURCE_REPOSITORY: ${{ job.workflow_repository }}\n          SOURCE_SHA: ${{ job.workflow_sha }}\n        run: |\n          [[ "$SOURCE_REPOSITORY" =~ ^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$ ]] || { echo \'job.workflow_repository を読めない\'; exit 1; }\n          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo \'job.workflow_sha を読めない\'; exit 1; }\n      # 呼んだ'));
-brk('同時実行の組', '呼ぶ側の組を外す', edit(TEMPLATE, "    concurrency:\n      group: ${{ github.workflow }}-${{ github.ref }}\n      cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n", ''));
+brk('同時実行の組', '呼ぶ側の組を外す', edit(TEMPLATE, "    concurrency:\n      group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}\n      cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n", ''));
+brk('同時実行の組', 'main の実行を一つの組に入れる', edit(SELFTEST, "github.event_name == 'pull_request' && github.ref || github.run_id", 'github.ref'));
 brk('同時実行の組', 'main の実行も取り消す', edit(SELFTEST, "cancel-in-progress: ${{ github.event_name == 'pull_request' }}", 'cancel-in-progress: true'));
 brk('起こす出来事', 'pull_request_target で起こす', edit(TEMPLATE, '  pull_request:\n', '  pull_request_target:\n'));
 brk('起こす出来事', 'workflow_run で起こす', edit(SELFTEST, '  workflow_dispatch:\n', '  workflow_dispatch:\n  workflow_run:\n    workflows: [x]\n'));
@@ -803,8 +873,8 @@ brk('目録と各リポジトリの CI', 'CI の手順を一つ変える', editR
 brk('横断の手順と正本の CI', '横断の手順を一つ外す', edit(SHARED, '        run: node verification/check_ecosystem.js\n', '        run: echo\n'));
 brk('横断の手順と正本の CI', 'pip を固めずに入れる', edit(SHARED, 'pip install --require-hashes --only-binary=:all: -r "$REQUIREMENTS"', 'pip install numpy pypdf'));
 brk('横断の手順と正本の CI', '正本の横断の手順を変える', editRepo('cpsbvbng26-dotcom', '.github/workflows/ecosystem.yml', (t) => t.replace('run: node verification/check_all.js', 'run: node verification/check_all.js --quick')));
-brk('正本の写し', 'SECURITY.md を一字変える', edit('SECURITY.md', '7 日以内', '8 日以内'));
-brk('正本の写し', 'copies.json の値を一つ変える', editRe(COPIES_JSON, /"SECURITY\.md": "[0-9a-f]/, '"SECURITY.md": "x'));
+brk('正本の写し', 'empty-issue.yml を一字変える', edit('.github/workflows/empty-issue.yml', 'waits 10 minutes', 'waits ten minutes'));
+brk('正本の写し', 'copies.json の値を一つ変える', editRe(COPIES_JSON, /"\.github\/workflows\/empty-issue\.yml": "[0-9a-f]/, '".github/workflows/empty-issue.yml": "x'));
 brk('正本の写し', '並べた正本だけを変える', editRepo('cpsbvbng26-dotcom', '.github/checked-intake/verify.js', (t) => t + '\n'));
 brk('呼ぶ側の雛形', '雛形の値を履歴に無いものにする', editRe(TEMPLATE, /shared-check\.yml@[0-9a-f]{40}/, 'shared-check.yml@' + '0'.repeat(40)));
 brk('呼ぶ側の雛形', '雛形の値を最初のコミットにする', (s) => { const first = execFileSync('git', ['rev-list', '--max-parents=0', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim().split('\n')[0]; return editRe(TEMPLATE, /shared-check\.yml@[0-9a-f]{40}/, 'shared-check.yml@' + first)(s); });
@@ -818,6 +888,7 @@ brk('各リポジトリに置いた呼び出し', '写しで動くリポジト�
   t.repos[n]['.github/workflows/shared-check.yml'] = t.text[SHARED]; t.repos[n]['.github/workflows/shared.yml'] = t.text[LOCAL];
   for (const f of TOOLS) t.repos[n]['.github/shared-check/' + path.basename(f)] = t.text[f];
   t.repos[n]['.github/shared-check/repo.json'] = JSON.stringify(m.repos[n]);
+  t.repos[n]['.github/shared-check/LICENSE'] = t.text['LICENSE-CODE'];
   t.repos[n]['.github/shared-check/own.js'] += '\n';
   return t;
 });
@@ -864,6 +935,33 @@ brk('Zenodo の記録', '開示を外す', edit('.zenodo.json', ' Claude is not 
 brk('Zenodo の記録', 'ライセンスの欄を cc-by-4.0 にする', edit('.zenodo.json', '"license": "mit"', '"license": "cc-by-4.0"'));
 brk('Zenodo の記録', '関連に DOI を置く', editJSON('.zenodo.json', (z) => { z.related_identifiers.push({ identifier: '10.5281/zenodo.1', relation: 'isPartOf', scheme: 'doi' }); }));
 brk('Zenodo の記録', 'upload_type を変える', edit('.zenodo.json', '"upload_type": "software"', '"upload_type": "dataset"'));
+brk('横断の検査を回す欄', '十の外の欄の cross を true にする', editJSON('repos.json', (m) => { m.repos.sophaxis.cross = true; }));
+brk('横断の検査を回す欄', '十の欄の cross を false にする', editJSON('repos.json', (m) => { m.repos['solitary-school'].cross = false; }));
+brk('目録の形', '写しで動く欄の cross を true にする', editJSON('repos.json', (m) => { const n = Object.keys(m.repos).find((x) => m.repos[x].caller === 'self-contained'); m.repos[n].cross = true; }));
+brk('目録の形', 'cross を外す', editJSON('repos.json', (m) => { delete m.repos['deposit-check'].cross; }));
+brk('目録の形', '正本を持つリポジトリの cross を false にする', editJSON('repos.json', (m) => { m.repos[m.entrance].cross = false; }));
+brk('横断の手順と正本の CI', '横断の検査を cross でない欄でも回す', edit(SHARED, "      - if: needs.plan.outputs.cross == 'true'\n        name: 各リポジトリの検査を全部", "      - if: needs.plan.outputs.common == 'true'\n        name: 各リポジトリの検査を全部"));
+brk('横断の手順と正本の CI', 'cross でない欄もすべてを走査する', edit(SHARED, 'else node "$tools/common.js" repos --only "$CALLER"; fi', 'else node "$tools/common.js" repos; fi'));
+brk('正本の写し', 'SECURITY.md を写しの欄に戻す', editJSON('repos.json', (m) => { m.repos[m.hub].copies.unshift('SECURITY.md'); }));
+brk('SECURITY.md', '宛先の道を外す', edit('SECURITY.md', '[ORCID の記録](https://orcid.org/0009-0000-1406-0547)', 'ORCID の記録'));
+brk('SECURITY.md', '確かめた日を外す', edit('SECURITY.md', '2026-11-19 に、GitHub の API', 'GitHub の API'));
+brk('SECURITY.md', '正本の文を戻す', edit('SECURITY.md', 'このワークフローと道具についての報告も、この窓口で受けます。', '同じ運営者の errata-check と deposit-check の二つのリポジトリには、そのほかに GitHub Action があります。'));
+brk('SECURITY.md', '日本語の日数だけを変える', edit('SECURITY.md', '答えは 7 日以内を目指します。', '答えは 8 日以内を目指します。'));
+brk('SECURITY.md', '正本と同じにする', (s) => { const t = clone(s); if (!t.repos || !t.repos[manifestOf(t).entrance]) throw noRepos('正本'); t.text['SECURITY.md'] = t.repos[manifestOf(t).entrance]['SECURITY.md']; return t; });
+brk('各リポジトリに置いた呼び出し', '写しの置き場に道具のライセンスが無い', (s) => {
+  const t = clone(s); const m = manifestOf(t); const n = Object.keys(m.repos).find((x) => m.repos[x].caller === 'self-contained');
+  if (!t.repos || !t.repos[n]) throw noRepos(n);
+  t.repos[n]['.github/workflows/shared-check.yml'] = t.text[SHARED]; t.repos[n]['.github/workflows/shared.yml'] = t.text[LOCAL];
+  for (const f of TOOLS) t.repos[n]['.github/shared-check/' + path.basename(f)] = t.text[f];
+  t.repos[n]['.github/shared-check/repo.json'] = JSON.stringify(m.repos[n]);
+  return t;
+});
+brk('散文の数', '語の数を変える', edit('README.md', 'ワークフローは三つの仕事を持ちます。', 'ワークフローは四つの仕事を持ちます。'));
+brk('散文の数', '英語の語の数を変える', edit('README.en.md', 'The workflow has three jobs.', 'The workflow has four jobs.'));
+brk('散文の数', '表に無い語の数を書く', edit('docs/decisions.md', 'マージはマージコミットで行います。', 'マージは五つの枝からマージコミットで行います。'));
+brk('散文の数', '外した数を変える', edit('docs/decisions.md', '宛先ではないものを二つ外しました。', '宛先ではないものを三つ外しました。'));
+brk('道具の振る舞い', 'common が --only を見ない', edit('tools/common.js', 'for (const r of ctx.scan || ctx.repos) {', 'for (const r of ctx.repos) {'));
+brk('道具の振る舞い', 'plan が cross をいつも true にする', edit('tools/plan.js', "loaded.mode === 'hub' && e.cross === true", "loaded.mode === 'hub'"));
 brk('Dependabot', 'GitHub Actions を見なくする', edit('.github/dependabot.yml', 'package-ecosystem: github-actions', 'package-ecosystem: npm'));
 
 /* ---------- 回す ---------- */
