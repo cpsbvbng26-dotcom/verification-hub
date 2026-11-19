@@ -1,8 +1,11 @@
 name: 共通の検査
 # 運営者のリポジトリに共通する検査（cpsbvbng26-dotcom/verification-hub の shared-check.yml）を、変更のたびに回す。
-# 呼ぶ先はコミットの値で固める。ハブの main が変わっても、ここで値を上げるまで、この検査は変わらない。
+# 呼ぶ先はコミットの値で固める。ハブのワークフロー・道具・目録は、ここで値を上げるまで変わらない。
+# 横断の検査と並べるリポジトリは、実行のときの各リポジトリの既定の枝から読むので、そちらが動けば結果も変わりうる。
 # 注釈の版（v1）は呼び方の版である。入力も鍵も渡さない。時間の上限は、呼ばれる側の仕事にある（呼ぶ仕事には置けない）。
-# 同時実行の組は、この仕事に置く。同じ PR の新しい push は古い実行を取り消し、main の実行は取り消さない。
+# 同時実行の組は、この仕事に置く。PR では組が PR ごとに一つで、新しい実行が、走っている実行と待っている実行を取り消す。
+# PR のほか（main への push・定期・手で起こすとき）は、実行ごとに組が分かれるので、どの実行も取り消されない
+# （GitHub は、同じ組で待っている実行を、cancel-in-progress が false でも新しい実行で取り消す）。
 on:
   push:
     branches: [main]
@@ -14,6 +17,6 @@ jobs:
   shared:
     name: 共通の検査
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
+      group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-    uses: cpsbvbng26-dotcom/verification-hub/.github/workflows/shared-check.yml@036b061522bef84497f14f65ef9b6308cafc4d00 # v1
+    uses: cpsbvbng26-dotcom/verification-hub/.github/workflows/shared-check.yml@8785e81e5236e880cc18e10f46aa2993a38e5b14 # v1
