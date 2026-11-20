@@ -414,6 +414,8 @@
       "copies": [
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/error-report.yml",
+        ".github/checked-intake/verify.js",
+        ".github/workflows/checked-intake.yml",
         ".github/workflows/empty-issue.yml"
       ],
       "jobs": [
@@ -551,7 +553,16 @@
           ]
         }
       ],
-      "not_carried": {}
+      "not_carried": {
+        "checked-intake.yml/intake": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        },
+        "checked-intake.yml/test": {
+          "kind": "condition",
+          "why": "仕事に if があり、決まった出来事（issue・ラベル・定期など）でだけ動く"
+        }
+      }
     },
     "justice-and-algorithms": {
       "caller": "hub",
